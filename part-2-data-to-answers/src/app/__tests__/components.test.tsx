@@ -90,8 +90,8 @@ describe("StockShareBar", () => {
 
 describe("StateBars", () => {
   const rows = [
-    { name: "Irbid", in_stock: 10, low_stock: 0, out_of_stock: 0 },
-    { name: "Amman", in_stock: 276, low_stock: 88, out_of_stock: 76 },
+    { value: "Irbid", name: "Irbid", in_stock: 10, low_stock: 0, out_of_stock: 0 },
+    { value: "Amman", name: "Amman", in_stock: 276, low_stock: 88, out_of_stock: 76 },
   ];
   it("ranks the largest first and writes each total", () => {
     render(<StateBars rows={rows} />);
@@ -168,6 +168,14 @@ describe("RecordsTable", () => {
     expect(screen.getByText("(1.5 لتر)")).toBeInTheDocument();
     expect(screen.getByText("شارع الجامعة، إربد")).toBeInTheDocument();
   });
+  it("is a collapsible section: open by default, closed when asked", async () => {
+    const { container } = render(<RecordsTable records={rows} total={5} asOf="2026-08-25" />);
+    const details = container.querySelector("details")!;
+    expect(details).toHaveAttribute("open");
+    expect(container.querySelector("summary")).toHaveTextContent("Matching POS records");
+    const closed = render(<RecordsTable records={rows} total={5} asOf="2026-08-25" defaultOpen={false} />);
+    expect(closed.container.querySelector("details")).not.toHaveAttribute("open");
+  });
   it("renders nothing without records", () => {
     const { container } = render(<RecordsTable records={[]} total={0} asOf="" />);
     expect(container).toBeEmptyDOMElement();
@@ -200,5 +208,16 @@ describe("EmptyState", () => {
     expect(screen.getByRole("heading", { name: "Nothing" })).toBeInTheDocument();
     expect(screen.getByText("Try later")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go" })).toBeInTheDocument();
+  });
+});
+
+describe("AnswerMarkdown tables", () => {
+  it("renders a markdown table as a real, scrollable table", async () => {
+    const { default: AnswerMarkdown } = await import("@/components/app/AnswerMarkdown");
+    const { container } = render(<AnswerMarkdown>{"| Store | Price |\n|---|---|\n| Cozmo Dabouq | 6.90 |"}</AnswerMarkdown>);
+    expect(container.querySelector("table")).not.toBeNull();
+    expect(container.querySelector("table")!.parentElement).toHaveClass("overflow-x-auto");
+    expect(screen.getByRole("columnheader", { name: "Store" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Cozmo Dabouq" })).toBeInTheDocument();
   });
 });

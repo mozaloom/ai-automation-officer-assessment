@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { AlertTriangle, ArrowUp, RotateCcw, Square } from "lucide-react";
+import { AlertTriangle, ArrowUp, Maximize2, Minimize2, RotateCcw, Square } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { describeError } from "@/lib/api/errors";
 import { streamAnswer } from "@/lib/api/stream";
 import type { StreamEvent } from "@/lib/api/types";
 import { chatReducer, type AssistantMessage } from "@/lib/chat/reducer";
+import { wantsChart } from "@/lib/chart";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import AnswerMarkdown from "./AnswerMarkdown";
 import RecordsTable from "./RecordsTable";
@@ -15,7 +16,7 @@ import RecordsTable from "./RecordsTable";
 const newId = () => crypto.randomUUID(); // 36 characters: also valid as the runtime session id (it requires at least 33)
 const MAX_LENGTH = 500;
 
-export default function ChatPanel() {
+export default function ChatPanel({ expanded = false, onToggleExpanded }: { expanded?: boolean; onToggleExpanded?: () => void }) {
   const { t, locale } = useI18n();
   const [messages, dispatch] = useReducer(chatReducer, []);
   const [input, setInput] = useState("");
@@ -86,13 +87,21 @@ export default function ChatPanel() {
     : "";
 
   return (
-    <Card padding="none" className="flex min-h-[28rem] flex-col">
+    <Card padding="none" className={`flex flex-col ${expanded ? "h-full min-h-0 rounded-none border-0" : "min-h-[28rem]"}`}>
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <h2 className="text-sm font-semibold text-text-dark">{t.assistant.title}</h2>
-        <Button variant="ghost" size="sm" onClick={reset} disabled={!messages.length}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{t.assistant.newChat}</Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={reset} disabled={!messages.length}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{t.assistant.newChat}</Button>
+          {onToggleExpanded && (
+            <button type="button" onClick={onToggleExpanded} aria-pressed={expanded} aria-label={expanded ? t.common.exitFullScreen : t.common.fullScreen} title={expanded ? t.common.exitFullScreen : t.common.fullScreen}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-gray transition-colors hover:bg-wash hover:text-text-dark active:scale-[0.97]">
+              {expanded ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-6" ref={logRef} role="log" aria-live="off" aria-label={t.assistant.conversation} aria-busy={streaming} style={{ maxHeight: "62dvh" }}>
+      <div className={`flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-6 ${expanded ? "mx-auto w-full max-w-4xl" : ""}`} ref={logRef} role="log" aria-live="off" aria-label={t.assistant.conversation} aria-busy={streaming} style={expanded ? undefined : { maxHeight: "62dvh" }}>
         {messages.length === 0 && (
           <div>
             <p className="max-w-xl text-sm leading-relaxed text-text-gray">{t.assistant.intro}</p>
@@ -123,7 +132,7 @@ export default function ChatPanel() {
                 {m.text && <div className="max-w-prose leading-relaxed"><AnswerMarkdown>{m.text}</AnswerMarkdown></div>}
                 {m.phase === "stopped" && <p className="mt-1 text-xs text-text-gray">{t.assistant.stopped}</p>}
                 {m.grounded === false && <p className="mt-2 max-w-prose rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">{t.assistant.unverified}</p>}
-                {m.records.length > 0 && <RecordsTable records={m.records} total={m.total || m.records.length} asOf={m.asOf} />}
+                {m.records.length > 0 && <RecordsTable records={m.records} total={m.total || m.records.length} asOf={m.asOf} defaultView={wantsChart(m.question) ? "chart" : "table"} defaultOpen={index === messages.length - 1} />}
               </>
             )}
           </article>

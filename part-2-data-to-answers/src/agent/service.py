@@ -11,7 +11,7 @@ from collections import OrderedDict
 from typing import AsyncIterator, Callable
 
 from config import Settings
-from tools.analytics import dashboard
+from tools.analytics import dashboard, records_view
 from tools.availability import DataStore, store_from_settings
 from tools.grounding import find_ungrounded
 from tools.glossary import has_arabic
@@ -53,6 +53,8 @@ class AvailabilityService:
             return self.ask(payload.get("prompt"), session_id or payload.get("session_id"), payload.get("locale"))
         if action == "dashboard":
             return self.dashboard(payload.get("filters") or {})
+        if action == "records":
+            return self.records(payload.get("filters") or {})
         return _error("invalid_request", f"Unknown action {action!r}.")
 
     # ------------------------------------------------------------------ dashboard
@@ -64,6 +66,12 @@ class AvailabilityService:
         data = dashboard(self.store.get(), city=_str(filters.get("city")), category=_str(filters.get("category")), status=_str(filters.get("status")))
         log.info("dashboard", extra={"event": "dashboard", "filters": data["filters"], "listings": data["kpis"]["listings"], "latency_ms": _ms(started)})
         return data
+
+    def records(self, filters: dict) -> dict:
+        if not isinstance(filters, dict):
+            return _error("invalid_request", "filters must be an object.")
+        keys = ("city", "category", "status", "product", "store")
+        return records_view(self.store.get(), **{k: _str(filters.get(k)) for k in keys})
 
     # ------------------------------------------------------------------ assistant
 

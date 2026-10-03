@@ -24,3 +24,12 @@ describe("right-to-left safety", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// APIs that older browsers lack throw while rendering and show the framework's "This page couldn't load" page.
+describe("browser compatibility", () => {
+  it("does not use URLSearchParams.size (missing before Chrome 113 / Safari 17)", () => {
+    const sources = [...files(path.join(ROOT, "components")), ...files(path.join(ROOT, "app")), ...files(path.join(ROOT, "lib"))];
+    const offenders = sources.filter((f) => /\b(?:query|params|search|searchParams)\.size\b/.test(readFileSync(f, "utf8")));
+    expect(offenders.map((f) => path.relative(ROOT, f))).toEqual([]);
+  });
+});

@@ -97,6 +97,28 @@ for (const l of ["en", "ar"] as const) {
       await expect(page.getByTestId("kpi-listings")).toHaveText(num(t.total));
     });
 
+    test("the dashboard is interactive: click to filter, sort and search, drill into records, full screen", async ({ page }) => {
+      const t = truth();
+      await login(page, l);
+      await expect(page.getByTestId("kpi-listings")).toHaveText(num(t.total));
+      await page.locator("section[aria-labelledby=by-city]").getByRole("button", { name: /Amman|عمّان/ }).click();
+      await expect(page).toHaveURL(/city=/);
+      await page.getByRole("button", { name: T[l].reset }).click();
+      await expect(page.getByTestId("kpi-listings")).toHaveText(num(t.total));
+      const products = page.locator("section[aria-labelledby=watch-products]");
+      await products.getByRole("searchbox").fill(l === "en" ? "milk" : "حليب");
+      await expect(products.locator("tbody tr").first()).toBeVisible();
+      await products.locator("tbody tr").first().getByRole("button").click();
+      const panel = page.getByRole("dialog");
+      await expect(panel.getByTestId("records")).toBeVisible({ timeout: 30_000 });
+      await shot(page, `${l}-05-drill-panel`);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+      await page.locator("section[aria-labelledby=by-category]").getByRole("button", { name: l === "en" ? /Full screen/ : /ملء الشاشة/ }).click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
+    });
+
     test("the assistant streams an answer from the records and asks when a term is ambiguous", async ({ page }) => {
       const t = truth();
       await login(page, l);
@@ -116,6 +138,19 @@ for (const l of ["en", "ar"] as const) {
       await page.keyboard.press("Enter");
       await expect(page.getByRole("button", { name: T[l].send })).toBeVisible({ timeout: 60_000 });
       await expect(page.getByTestId("records")).toHaveCount(0);
+    });
+
+    test("asking for a chart shows the records as a chart that can be regrouped", async ({ page }) => {
+      await login(page, l);
+      await page.getByRole("link", { name: T[l].assistant }).first().click();
+      await page.getByLabel(T[l].question).fill(l === "en" ? "Show a chart of Tahini prices" : "ارسم مخطط لأسعار الطحينة");
+      await page.keyboard.press("Enter");
+      const records = page.getByTestId("records");
+      await expect(records.getByRole("list").first()).toBeVisible({ timeout: 60_000 }); // chart view opens by itself
+      await expect(page.getByRole("button", { name: T[l].send })).toBeVisible({ timeout: 60_000 });
+      await shot(page, `${l}-06-chat-chart`);
+      await records.getByRole("combobox").first().selectOption("store_name");
+      await expect(records.getByRole("listitem").first()).toBeVisible();
     });
 
     test("signing out returns to sign-in and protects the app again", async ({ page }) => {
