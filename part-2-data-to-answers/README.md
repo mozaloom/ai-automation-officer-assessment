@@ -129,7 +129,7 @@ Tear down with `make destroy` (asks first, empties the versioned bucket, removes
 
 ### Demo user
 
-`make deploy` creates a demo user, `demo@xpand.medgan.ai`, with a generated password written to the git-ignored file `.demo-credentials`. To create or reset it yourself:
+`make deploy` creates a demo user, `demo@xpandpros.com`, with a generated password written to the git-ignored file `.demo-credentials`. To create or reset it yourself:
 
 ```bash
 infrastructure/scripts/create_demo_user.sh                # random password
@@ -182,3 +182,9 @@ Realistic questions used by the live tests are in `tests/sample_queries.json`:
 - Availability is the latest recorded POS data, not live inventory.
 - `sales_rep` is deliberately not exposed.
 - The data is one CSV read from S3 and cached for 5 minutes. A larger or frequently changing dataset would call for a query engine instead of in-memory filtering.
+
+## Streaming and languages
+
+- `/ask` streams Server-Sent Events (API Gateway HTTP_PROXY with response streaming straight to the AgentCore runtime). Events: `start`, `status`, `records`, `delta`, `reset`, `replace`, `done`, `error`. The records table arrives before the text; the grounding check runs on the finished text and can `reset`/`replace` it.
+- Send `Authorization: Bearer <Cognito ID token>` on every call, plus `x-session-id`; body `{"prompt", "locale": "en"|"ar"}`.
+- The web app is bilingual at `/en/` and `/ar/` (the root opens in the browser language; the choice is remembered). Arabic is clear MSA with Jordanian wording; the assistant also understands Jordanian dialect. Names and aliases live in `src/tools/glossary.json` (copied to `src/app/lib/i18n/glossary.json`; a test fails if they drift). The Arabic copy still needs a native proofread.

@@ -1,25 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatJod, formatNumber, formatPct, formatShortDate, statusVariant } from "@/lib/format";
 import { clearSession, isExpired, loadSession, saveSession, type Session } from "@/lib/auth/session";
-
-describe("format", () => {
-  it("formats ISO dates without time zone drift", () => {
-    expect(formatDate("2026-08-25")).toBe("25 Aug 2026");
-    expect(formatDate("2026-01-05")).toBe("5 Jan 2026");
-    expect(formatShortDate("2026-08-12")).toBe("12 Aug");
-  });
-  it("passes through unparseable dates", () => { expect(formatDate("soon")).toBe("soon"); expect(formatDate(undefined)).toBe(""); });
-  it("formats numbers, percentages and prices", () => {
-    expect(formatNumber(1234)).toBe("1,234");
-    expect(formatPct(63.55)).toBe("63.5%".replace("63.5", (63.55).toFixed(1)));
-    expect(formatJod(6.9)).toBe("JOD 6.90");
-  });
-  it("maps stock states to badge colours", () => {
-    expect(statusVariant("In Stock")).toBe("green");
-    expect(statusVariant("Low Stock")).toBe("amber");
-    expect(statusVariant("Out of Stock")).toBe("red");
-  });
-});
 
 describe("session storage", () => {
   const session: Session = { email: "a@b.co", id_token: "i", access_token: "a", refresh_token: "r", expires_at: Date.now() + 3_600_000 };

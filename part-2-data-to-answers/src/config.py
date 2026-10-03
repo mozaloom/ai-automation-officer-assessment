@@ -28,6 +28,7 @@ class Settings:
     session_cache_size: int = 64
     max_output_tokens: int = 1500
     log_level: str = "INFO"
+    allowed_origins: tuple[str, ...] = ("http://localhost:3000",)  # browser origins allowed to call the runtime (CORS)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -45,4 +46,5 @@ class Settings:
             session_cache_size=int(env.get("SESSION_CACHE_SIZE", defaults.session_cache_size)),
             max_output_tokens=int(env.get("MAX_OUTPUT_TOKENS", defaults.max_output_tokens)),
             log_level=env.get("LOG_LEVEL", defaults.log_level).upper(),
+            allowed_origins=tuple(o.strip() for o in env["ALLOWED_ORIGINS"].split(",") if o.strip()) if env.get("ALLOWED_ORIGINS") else defaults.allowed_origins,
         )

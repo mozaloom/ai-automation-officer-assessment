@@ -42,7 +42,7 @@ class AvailabilityStack(Stack):
 
         data_bucket = self._data_bucket()
         user_pool, client = self._cognito()
-        runtime = self._runtime(data_bucket, user_pool, client)
+        runtime = self._runtime(data_bucket, user_pool, client, web_origin)
         api = self._api(runtime, user_pool, web_origin)
 
         web = self._web(web_origin)
@@ -98,7 +98,7 @@ class AvailabilityStack(Stack):
 
     # ------------------------------------------------------------------ AgentCore runtime
 
-    def _runtime(self, data_bucket: s3.Bucket, user_pool: cognito.UserPool, client: cognito.UserPoolClient) -> agentcore.CfnRuntime:
+    def _runtime(self, data_bucket: s3.Bucket, user_pool: cognito.UserPool, client: cognito.UserPoolClient, web_origin: str) -> agentcore.CfnRuntime:
         code = s3_assets.Asset(self, "AgentCode", path=str(ROOT / "build" / "agent.zip"))
         role = iam.Role(
             self, "RuntimeRole",
@@ -158,6 +158,7 @@ class AvailabilityStack(Stack):
                 "DATA_S3_KEY": "pos_availability.csv",
                 "AWS_REGION": self.region,
                 "LOG_LEVEL": "INFO",
+                "ALLOWED_ORIGINS": web_origin,  # CORS for streamed responses (API Gateway cannot add headers to them)
                 # AgentCore Observability (ADOT): traces, metrics and logs to CloudWatch
                 "AGENT_OBSERVABILITY_ENABLED": "true",
                 "OTEL_PYTHON_DISTRO": "aws_distro",
@@ -202,9 +203,33 @@ class AvailabilityStack(Stack):
         cors_headers = {"method.response.header.Access-Control-Allow-Origin": f"'{web_origin}'", "method.response.header.Vary": "'Origin'"}
         method_cors = {"method.response.header.Access-Control-Allow-Origin": False, "method.response.header.Vary": False}
 
+        runtime_url = Fn.join("", ["https://bedrock-agentcore.", self.region, ".amazonaws.com/runtimes/", runtime.attr_agent_runtime_id, "/invocations"])
+        runtime_address = {  # runtime addressed by id + accountId: no ARN encoding
+            "integration.request.querystring.qualifier": "'DEFAULT'",
+            "integration.request.querystring.accountId": f"'{self.account}'",
+        }
+        session_param = "integration.request.header.X-Amzn-Bedrock-AgentCore-Runtime-Session-Id"
+
+        def stream_integration() -> apigw.HttpIntegration:
+            """Pass-through (HTTP_PROXY) integration that streams the runtime's Server-Sent Events to the browser.
+
+            The client sends `Authorization: Bearer <Cognito ID token>`; the Cognito authorizer checks it here and the
+            runtime's own JWT authorizer checks it again. Response headers (CORS) come from the runtime.
+            """
+            return apigw.HttpIntegration(
+                runtime_url,
+                http_method="POST",
+                proxy=True,
+                options=apigw.IntegrationOptions(
+                    response_transfer_mode=apigw.ResponseTransferMode.STREAM,
+                    timeout=Duration.seconds(120),
+                    request_parameters={session_param: "method.request.header.x-session-id", **runtime_address},
+                ),
+            )
+
         def integration(template: str, session_header: str) -> apigw.HttpIntegration:
             return apigw.HttpIntegration(
-                Fn.join("", ["https://bedrock-agentcore.", self.region, ".amazonaws.com/runtimes/", runtime.attr_agent_runtime_id, "/invocations"]),
+                runtime_url,
                 http_method="POST",
                 proxy=False,
                 options=apigw.IntegrationOptions(
@@ -213,9 +238,9 @@ class AvailabilityStack(Stack):
                     request_parameters={
                         "integration.request.header.Content-Type": f"'{JSON}'",
                         "integration.request.header.Accept": f"'{JSON}'",
-                        "integration.request.header.X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": session_header,
-                        "integration.request.querystring.qualifier": "'DEFAULT'",
-                        "integration.request.querystring.accountId": f"'{self.account}'",  # runtime addressed by id + accountId: no ARN encoding
+                        "integration.request.header.Authorization": "method.request.header.Authorization",  # `Bearer <ID token>` as sent by the client
+                        session_param: session_header,
+                        **runtime_address,
                     },
                     request_templates={JSON: template},
                     integration_responses=[
@@ -248,23 +273,23 @@ class AvailabilityStack(Stack):
         validator = apigw.RequestValidator(self, "Validator", rest_api=api, request_validator_name="validate-body-and-params", validate_request_body=True, validate_request_parameters=True)
         ask_model = api.add_model("AskModel", content_type=JSON, model_name="AskRequest", schema=apigw.JsonSchema(
             schema=apigw.JsonSchemaVersion.DRAFT4, type=apigw.JsonSchemaType.OBJECT, required=["prompt"], additional_properties=False,
-            properties={"prompt": apigw.JsonSchema(type=apigw.JsonSchemaType.STRING, min_length=1, max_length=500)},
+            properties={
+                "prompt": apigw.JsonSchema(type=apigw.JsonSchemaType.STRING, min_length=1, max_length=500),
+                "locale": apigw.JsonSchema(type=apigw.JsonSchemaType.STRING, enum=["en", "ar"]),
+            },
         ))
         responses = [
             apigw.MethodResponse(status_code=code, response_parameters=method_cors, response_models={JSON: apigw.Model.EMPTY_MODEL}) for code in ("200", "400", "429", "502")
         ]
 
-        bearer = '#set($context.requestOverride.header.Authorization = "Bearer " + $input.params(\'Authorization\'))\n'
-        ask_template = bearer + '{"action":"ask","prompt":$input.json(\'$.prompt\'),"session_id":"$util.escapeJavaScript($input.params(\'x-session-id\'))"}'
         api.root.add_resource("ask").add_method(
             "POST",
-            integration(ask_template, "method.request.header.x-session-id"),
+            stream_integration(),
             authorizer=authorizer, authorization_type=apigw.AuthorizationType.COGNITO,
             request_validator=validator, request_models={JSON: ask_model},
             request_parameters={"method.request.header.x-session-id": True},
-            method_responses=responses,
         )
-        dash_template = bearer + (
+        dash_template = (
             '{"action":"dashboard","filters":{"city":"$util.escapeJavaScript($input.params(\'city\'))",'
             '"category":"$util.escapeJavaScript($input.params(\'category\'))","status":"$util.escapeJavaScript($input.params(\'status\'))"}}'
         )
@@ -273,7 +298,10 @@ class AvailabilityStack(Stack):
             integration(dash_template, f"'{DASHBOARD_SESSION}'"),
             authorizer=authorizer, authorization_type=apigw.AuthorizationType.COGNITO,
             request_validator=validator,
-            request_parameters={"method.request.querystring.city": False, "method.request.querystring.category": False, "method.request.querystring.status": False},
+            request_parameters={
+                "method.request.header.Authorization": True,
+                "method.request.querystring.city": False, "method.request.querystring.category": False, "method.request.querystring.status": False,
+            },
             method_responses=responses,
         )
 

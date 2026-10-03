@@ -7,6 +7,7 @@ Needs AWS credentials (profile with cognito-idp:AdminInitiateAuth) and either bu
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -56,7 +57,7 @@ def token(cfg):
 def call(cfg, method, path, body=None, token=None, headers=None):
     h = {"Content-Type": "application/json", "Origin": ORIGIN, **(headers or {})}
     if token:
-        h["Authorization"] = token
+        h["Authorization"] = f"Bearer {token}"
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(cfg["api"] + path, data=data, headers=h, method=method)
     try:
@@ -68,6 +69,30 @@ def call(cfg, method, path, body=None, token=None, headers=None):
             return err.code, dict(err.headers), json.loads(raw or b"{}")
         except json.JSONDecodeError:
             return err.code, dict(err.headers), {"raw": raw.decode()}
+
+
+def stream(cfg, body, token, sid=None, stop_after=None):
+    """POST /ask and read the Server-Sent Events as they arrive: returns (status, headers, [(seconds, event)])."""
+    h = {"Content-Type": "application/json", "Accept": "text/event-stream", "Origin": ORIGIN, "x-session-id": sid or session()}
+    if token:
+        h["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(cfg["api"] + "/ask", data=json.dumps(body).encode(), headers=h, method="POST")
+    started, events = time.perf_counter(), []
+    try:
+        with urllib.request.urlopen(request, timeout=90) as resp:
+            for raw in resp:  # one line at a time: proves events are not buffered until the end
+                line = raw.decode("utf-8").strip()
+                if line.startswith("data:"):
+                    events.append((time.perf_counter() - started, json.loads(line[5:])))
+                    if stop_after and events[-1][1]["type"] == stop_after:
+                        break
+            return resp.status, dict(resp.headers), events
+    except urllib.error.HTTPError as err:
+        return err.code, dict(err.headers), [(0.0, {"raw": err.read().decode()})]
+
+
+def final(events):
+    return next(e for _, e in reversed(events) if e["type"] == "done")
 
 
 def session():
@@ -86,6 +111,7 @@ def test_missing_token_is_unauthorized(cfg, method, path, body):
 
 def test_garbage_token_is_unauthorized(cfg):
     assert call(cfg, "GET", "/dashboard", token="not.a.jwt")[0] == 401
+    assert stream(cfg, {"prompt": "hi"}, "not.a.jwt")[0] == 401
 
 
 def test_cors_preflight(cfg):
@@ -115,35 +141,59 @@ def test_dashboard_filters(cfg, token, raw_rows):
     assert body["kpis"]["listings"] == expected and body["filters"] == {"city": "Amman", "status": "Low Stock"}
 
 
-# ------------------------------------------------------------------ assistant
+# ------------------------------------------------------------------ assistant (streamed)
 
 
-def test_ask_is_grounded_in_returned_records(cfg, token, raw_rows):
-    status, _, body = call(cfg, "POST", "/ask", {"prompt": "Where can I buy Olive Oil Extra Virgin in Amman?"}, token, {"x-session-id": session()})
-    assert status == 200 and "error" not in body
+def test_ask_streams_events_incrementally_and_is_grounded(cfg, token, raw_rows):
+    status, headers, events = stream(cfg, {"prompt": "Where can I buy Olive Oil Extra Virgin in Amman?", "locale": "en"}, token)
+    assert status == 200 and headers["Content-Type"].startswith("text/event-stream")
+    assert headers.get("Access-Control-Allow-Origin") in (ORIGIN, "*")  # set by AgentCore/the runtime; requests are credential-less so "*" is fine
+    kinds = [e["type"] for _, e in events]
+    assert kinds[0] == "start" and kinds[-1] == "done" and "error" not in kinds
+    assert kinds.index("records") < kinds.index("delta")  # the table is available before the text
+    deltas = [t for t, e in events if e["type"] == "delta"]
+    assert len(deltas) > 5 and deltas[0] < events[-1][0] - 0.2, "text arrived all at once: the response is being buffered"
     expected = [r for r in raw_rows if r["product_name"] == "Olive Oil Extra Virgin" and r["city"] == "Amman"]
-    assert body["record_count"] == len(expected) and body["grounded"] is True
-    assert {r["store_name"] for r in body["records"]} == {r["store_name"] for r in expected}
-    assert all("sales_rep" not in r for r in body["records"])
+    done = final(events)
+    assert done["record_count"] == len(expected) and done["grounded"] is True
+    assert {r["store_name"] for r in done["records"]} == {r["store_name"] for r in expected}
+    assert all("sales_rep" not in r for r in done["records"])
+    assert "".join(e["text"] for _, e in events if e["type"] == "delta").strip() == done["answer"]
+
+
+def test_ask_in_arabic(cfg, token, raw_rows):
+    _, _, events = stream(cfg, {"prompt": "وين بلاقي طحينة بعمان؟", "locale": "ar"}, token)
+    done = final(events)
+    expected = [r for r in raw_rows if r["product_name"] == "Tahini" and r["city"] == "Amman"]
+    assert done["record_count"] == len(expected) and done["grounded"] is True
+    assert any("\u0600" <= c <= "\u06ff" for c in done["answer"])
 
 
 def test_ambiguity_then_follow_up_keeps_the_session(cfg, token):
     sid = session()
-    _, _, first = call(cfg, "POST", "/ask", {"prompt": "Where can I buy tea in Amman?"}, token, {"x-session-id": sid})
+    first = final(stream(cfg, {"prompt": "Where can I buy tea in Amman?"}, token, sid)[2])
     assert first["records"] == [] and first["queries"][0]["ambiguous"]
-    _, _, second = call(cfg, "POST", "/ask", {"prompt": "Black Tea Bags"}, token, {"x-session-id": sid})
+    second = final(stream(cfg, {"prompt": "Black Tea Bags"}, token, sid)[2])
     assert second["records"] and {r["product_name"] for r in second["records"]} == {"Black Tea Bags"}
 
 
 def test_unknown_store_is_not_invented(cfg, token):
-    _, _, body = call(cfg, "POST", "/ask", {"prompt": "Does Carrefour Paris have Basmati Rice?"}, token, {"x-session-id": session()})
-    assert body["records"] == [] and body["queries"][0]["no_match"]
+    done = final(stream(cfg, {"prompt": "Does Carrefour Paris have Basmati Rice?"}, token)[2])
+    assert done["records"] == [] and done["queries"][0]["no_match"]
+
+
+def test_client_can_stop_reading_and_the_session_keeps_working(cfg, token):
+    sid = session()
+    _, _, partial = stream(cfg, {"prompt": "Where can I buy Basmati Rice?"}, token, sid, stop_after="delta")
+    assert partial[-1][1]["type"] == "delta"
+    done = final(stream(cfg, {"prompt": "Where can I buy Tahini in Irbid?"}, token, sid)[2])
+    assert done["records"]
 
 
 # ------------------------------------------------------------------ request validation (rejected at the edge)
 
 
-@pytest.mark.parametrize("body", [{}, {"prompt": ""}, {"prompt": "x" * 501}, {"prompt": "hi", "action": "dashboard"}, {"prompt": 5}])
+@pytest.mark.parametrize("body", [{}, {"prompt": ""}, {"prompt": "x" * 501}, {"prompt": "hi", "action": "dashboard"}, {"prompt": 5}, {"prompt": "hi", "locale": "fr"}])
 def test_invalid_bodies_are_rejected_with_400(cfg, token, body):
     assert call(cfg, "POST", "/ask", body, token, {"x-session-id": session()})[0] == 400
 

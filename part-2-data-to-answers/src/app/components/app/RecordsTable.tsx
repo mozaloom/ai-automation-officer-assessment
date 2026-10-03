@@ -1,32 +1,37 @@
+"use client";
+
 import type { PosRecord } from "@/lib/api/types";
-import { formatDate, formatJod } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import StatusBadge from "./StatusBadge";
 
-const head = "py-2 pe-3 text-start text-xs font-semibold uppercase tracking-wide text-text-gray";
+const head = "py-2 pe-3 text-start text-xs font-medium text-text-gray";
+const MAX_ROWS = 25;
 
+/** The records an answer was built from, shown under it so the reader can check every number. */
 export default function RecordsTable({ records, total, asOf }: { records: PosRecord[]; total: number; asOf: string }) {
+  const { t, locale, label, pack, jod, date, number } = useI18n();
   if (!records.length) return null;
-  const MAX_ROWS = 25;
   const rows = records.slice(0, MAX_ROWS);
+  const r = t.records;
   return (
-    <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50/60 p-3" data-testid="records">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-text-gray">
-        <span className="font-semibold text-text-dark">Matching POS records</span>
-        <span>Showing {rows.length} of {total}. Data as of {formatDate(asOf)}.</span>
+    <div className="enter mt-4 border-t border-line pt-3" data-testid="records">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="text-sm font-semibold text-text-dark">{r.title}</h3>
+        <p className="text-xs text-text-gray">{r.showing(rows.length, total, date(asOf))}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
-          <thead><tr className="border-b border-gray-200"><th className={head}>Store</th><th className={head}>Location</th><th className={head}>Product</th><th className={head}>State</th><th className={`${head} text-end`}>Qty</th><th className={`${head} text-end`}>Price</th><th className={`${head} text-end`}>Updated</th></tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {rows.map((r) => (
-              <tr key={`${r.store_name}|${r.product_name}|${r.pack_size}`}>
-                <td className="py-2 pe-3 font-medium text-text-dark">{r.store_name}</td>
-                <td className="py-2 pe-3 text-text-gray">{r.area}, {r.city}</td>
-                <td className="py-2 pe-3 text-text-dark">{r.product_name} <span className="text-text-gray">({r.pack_size})</span></td>
-                <td className="py-2 pe-3"><StatusBadge status={r.availability_status} /></td>
-                <td className="py-2 pe-3 text-end tabular-nums">{r.quantity_on_shelf}</td>
-                <td className="whitespace-nowrap py-2 pe-3 text-end tabular-nums">{formatJod(r.shelf_price_jod)}</td>
-                <td className="whitespace-nowrap py-2 text-end tabular-nums text-text-gray">{formatDate(r.last_updated)}</td>
+          <thead><tr className="border-b border-line"><th className={head}>{r.store}</th><th className={head}>{r.location}</th><th className={head}>{r.product}</th><th className={head}>{r.state}</th><th className={`${head} text-end`}>{r.quantity}</th><th className={`${head} text-end`}>{r.price}</th><th className={`${head} pe-0 text-end`}>{r.updated}</th></tr></thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((row) => (
+              <tr key={`${row.store_name}|${row.product_name}|${row.pack_size}`}>
+                <td className="py-2 pe-3 font-medium text-text-dark">{label("store_name", row.store_name)}</td>
+                <td className="py-2 pe-3 text-text-gray">{label("area", row.area)}{locale === "ar" ? "، " : ", "}{label("city", row.city)}</td>
+                <td className="py-2 pe-3 text-text-dark">{label("product_name", row.product_name)} <span className="text-text-gray">({pack(row.pack_size)})</span></td>
+                <td className="py-2 pe-3"><StatusBadge status={row.availability_status} /></td>
+                <td className="py-2 pe-3 text-end tabular-nums">{number(row.quantity_on_shelf)}</td>
+                <td className="whitespace-nowrap py-2 pe-3 text-end tabular-nums">{jod(row.shelf_price_jod)}</td>
+                <td className="whitespace-nowrap py-2 text-end tabular-nums text-text-gray">{date(row.last_updated)}</td>
               </tr>
             ))}
           </tbody>

@@ -11,12 +11,20 @@ class Ctx:
         self.session_id = "ctx-session-0123456789012345678901234"
 
 
-def test_runtime_entrypoint_routes_dashboard_and_session():
+def test_runtime_entrypoint_routes_dashboard_and_streams_ask():
+    import asyncio
+
     from agent import runtime
 
-    out = runtime.invoke({"action": "dashboard"}, Ctx())
+    out = asyncio.run(runtime.invoke({"action": "dashboard"}, Ctx()))
     assert out["kpis"]["listings"] == 936
-    assert runtime.invoke({"action": "ask", "prompt": ""}, None)["error"]["code"] == "invalid_request"
+    assert asyncio.run(runtime.invoke({"action": "bogus"}, None))["error"]["code"] == "invalid_request"
+
+    async def first_event():
+        stream = await runtime.invoke({"action": "ask", "prompt": ""}, None)
+        return [event async for event in stream]
+
+    assert asyncio.run(first_event()) == [{"type": "error", "code": "invalid_request", "message": "Please type a question."}]
 
 
 def test_tool_spec_exposes_only_the_six_filters():

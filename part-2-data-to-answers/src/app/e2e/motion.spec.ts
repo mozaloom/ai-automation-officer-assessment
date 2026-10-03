@@ -5,7 +5,7 @@ import path from "node:path";
 test.use({ reducedMotion: "no-preference" });
 
 test("the sign-in panel has moving waves that stop for reduced-motion users", async ({ page }) => {
-  await page.goto("/login/");
+  await page.goto("/en/login/");
   const wave = page.locator("aside .animate-wave-1").first();
   await expect(wave).toBeVisible();
   const transformAt = () => wave.evaluate((el) => getComputedStyle(el).transform);

@@ -12,13 +12,13 @@ describe("apiFetch", () => {
     configureApi({ getToken: () => "tok-1", refresh: async () => null, onUnauthorized: () => {} });
   });
 
-  it("sends the raw ID token, JSON body and query string (empty values dropped)", async () => {
+  it("sends the ID token as a Bearer token, the JSON body and the query string (empty values dropped)", async () => {
     fetchMock.mockImplementation(async () => reply(200, { ok: true }));
     await apiFetch("/dashboard", { query: { city: "Amman", status: undefined, category: "" } });
     await apiFetch("/ask", { method: "POST", body: { prompt: "hi" }, headers: { "x-session-id": "s".repeat(36) } });
     const [url1, init1] = fetchMock.mock.calls[0];
     expect(url1).toBe("/dashboard?city=Amman");
-    expect(init1.headers.Authorization).toBe("tok-1");
+    expect(init1.headers.Authorization).toBe("Bearer tok-1");
     const [, init2] = fetchMock.mock.calls[1];
     expect(init2.method).toBe("POST");
     expect(init2.headers["Content-Type"]).toBe("application/json");
@@ -32,23 +32,23 @@ describe("apiFetch", () => {
     configureApi({ getToken: () => "tok-1", refresh });
     fetchMock.mockResolvedValueOnce(reply(401, { message: "Unauthorized" })).mockResolvedValueOnce(reply(200, { fine: 1 }));
     await expect(apiFetch("/dashboard")).resolves.toEqual({ fine: 1 });
-    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("tok-2");
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer tok-2");
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("shares one refresh between concurrent 401s", async () => {
     const refresh = vi.fn().mockResolvedValue("tok-2");
     configureApi({ getToken: () => "tok-1", refresh });
-    fetchMock.mockImplementation(async (_u: string, init: RequestInit) => ((init.headers as Record<string, string>).Authorization === "tok-2" ? reply(200, {}) : reply(401, {})));
+    fetchMock.mockImplementation(async (_u: string, init: RequestInit) => ((init.headers as Record<string, string>).Authorization === "Bearer tok-2" ? reply(200, {}) : reply(401, {})));
     await Promise.all([apiFetch("/a"), apiFetch("/b")]);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("signals unauthorized and shows a friendly message when refresh is impossible", async () => {
+  it("signals unauthorized when refresh is impossible", async () => {
     const onUnauthorized = vi.fn();
     configureApi({ getToken: () => "tok-1", refresh: async () => null, onUnauthorized });
     fetchMock.mockResolvedValue(reply(401, { message: "Unauthorized" }));
-    await expect(apiFetch("/dashboard")).rejects.toMatchObject({ status: 401, message: expect.stringContaining("session has expired") });
+    await expect(apiFetch("/dashboard")).rejects.toMatchObject({ status: 401 });
     expect(onUnauthorized).toHaveBeenCalled();
   });
 

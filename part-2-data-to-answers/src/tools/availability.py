@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Callable, Iterable, Sequence
 
+from .glossary import get_glossary, has_arabic
+
 STATUSES = ("In Stock", "Low Stock", "Out of Stock")
 _STATUS_RANK = {status: rank for rank, status in enumerate(STATUSES)}
 _STATUS_ALIASES = {
@@ -302,7 +304,34 @@ def _other_field_hits(field: str, value: str, dataset: PosDataset) -> list[dict]
     return hits
 
 
-def query_availability(
+def query_availability(dataset: PosDataset, **kwargs) -> dict:
+    """Search POS availability. See module docstring; result shape is documented in the README.
+
+    With `with_labels=True` the result also carries `labels_ar`: English value -> Arabic name.
+    """
+    with_labels = kwargs.pop("with_labels", False)
+    result = _search(dataset, **kwargs)
+    if with_labels:
+        result["labels_ar"] = get_glossary().labels_for(_values_in(result))
+    return result
+
+
+def _values_in(result: dict) -> list[str]:
+    values: list[str] = []
+    for record in result.get("records", []):
+        values.extend(str(v) for v in record.values())
+    values.extend(result.get("status_counts", {}))
+    values.extend(result.get("pack_sizes_in_results", []))
+    values.extend((result.get("ambiguous") or {}).get("candidates", []))
+    for hint in ((result.get("no_match") or {}).get("hints") or {}).values():
+        values.extend(hint.get("suggestions", []))
+        values.extend(hint.get("available_for_product", []))
+        for other in hint.get("matches_other_field", []):
+            values.extend(other.get("values", []))
+    return values
+
+
+def _search(
     dataset: PosDataset,
     *,
     product_name: str | None = None,
@@ -313,7 +342,6 @@ def query_availability(
     availability_status: str | None = None,
     max_records: int = 25,
 ) -> dict:
-    """Search POS availability. See module docstring; result shape is documented in the README."""
     filters = {
         key: cleaned
         for key, cleaned in (
@@ -333,7 +361,26 @@ def query_availability(
             if name:
                 filters["product_name"] = name
             filters.setdefault("pack_size", embedded)
+    glossary = get_glossary()
+    arabic_input = any(has_arabic(v) for v in filters.values())
+    resolved: dict[str, tuple[set[str], bool]] = {}  # Arabic terms resolved through the glossary
+    interpreted: dict[str, str] = {}
+    if arabic_input:
+        if has_arabic(filters.get("pack_size", "")):
+            filters["pack_size"] = glossary.pack(filters["pack_size"]) or filters["pack_size"]
+        if has_arabic(filters.get("availability_status", "")):
+            filters["availability_status"] = glossary.status(filters["availability_status"]) or filters["availability_status"]
+        for field in ("product_name", "city", "area", "store_name"):
+            if field in filters and has_arabic(filters[field]):
+                found, exact = glossary.candidates(field, filters[field])
+                if found:
+                    resolved[field] = (found, exact)
+                    interpreted[field] = filters[field]
+                    if len(found) == 1:
+                        filters[field] = next(iter(found))
     base = {"filters_applied": dict(filters), "dataset_as_of": dataset.as_of.isoformat()}
+    if interpreted:
+        base["interpreted_from_arabic"] = interpreted
 
     status = None
     if "availability_status" in filters:
@@ -347,7 +394,8 @@ def query_availability(
     unmatched: list[str] = []
 
     if "product_name" in filters:
-        products, exact = _match_product(filters["product_name"], dataset.values("product_name"))
+        products, exact = resolved.get("product_name") or _match_product(filters["product_name"], dataset.values("product_name"))
+        products = products & set(dataset.values("product_name"))
         if len(products) > 1 and not exact and "pack_size" in filters:
             narrowed = {p for p in products if _match_pack(filters["pack_size"], {r.pack_size for r in dataset.records if r.product_name == p})}
             products = narrowed or products
@@ -363,7 +411,7 @@ def query_availability(
 
     for field in _LOCATION_FIELDS:
         if field in filters:
-            values = _match_text(filters[field], dataset.values(field))
+            values = (resolved[field][0] & set(dataset.values(field))) if field in resolved else _match_text(filters[field], dataset.values(field))
             (matched.__setitem__(field, values) if values else unmatched.append(field))
 
     if unmatched:
@@ -372,6 +420,13 @@ def query_availability(
             entry: dict = {"value": filters[field]}
             if field == "pack_size" and "product_name" in matched:
                 entry["available_for_product"] = sorted({r.pack_size for r in dataset.records if r.product_name in matched["product_name"]})
+            elif has_arabic(filters[field]):
+                entry["suggestions"] = [v for v in glossary.suggest(field, filters[field]) if v in dataset.values(field)]
+                entry["matches_other_field"] = [
+                    {"field": other, "values": sorted(found)[:3]}
+                    for other in ("product_name", "city", "area", "store_name")
+                    if other != field and (found := glossary.candidates(other, filters[field])[0] & set(dataset.values(other)))
+                ]
             else:
                 entry["suggestions"] = _suggest(filters[field], dataset.values(field))
                 entry["matches_other_field"] = _other_field_hits(field, filters[field], dataset)
