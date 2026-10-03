@@ -1,37 +1,41 @@
 # Part 2 – AWS Architecture: Product Availability Agent
 
-Diagram: `part-2-aws-architecture.drawio` (export: `part-2-aws-architecture.drawio.png`)
+Diagram: `part-2-aws-architecture.drawio` (exports: `.drawio.png`, `.drawio.svg`, `.drawio.pdf`)
 
-A marketing user asks a natural-language question about product availability. A Strands agent turns it into structured filters, a deterministic tool searches the POS availability data, and the agent answers using only the records returned.
+A marketing user signs in to an internal web app, sees a POS availability dashboard, and asks the Availability Assistant natural-language questions. A Strands agent turns each question into structured filters, a deterministic tool searches the POS data, and the answer is grounded in the records returned.
 
 ## Flow
 
-1. **Question:** The marketing user submits a question through a simple internal web UI hosted on AWS Amplify, for example "Where can I buy Olive Oil Extra Virgin in Amman?".
-2. **API:** The UI calls Amazon API Gateway, which receives the request and forwards it to the agent runtime.
-3. **Agent:** The Strands Availability Agent, hosted on Amazon Bedrock AgentCore Runtime, understands the request, extracts filters (product, pack size, city, area, store, availability), and decides whether to ask for clarification.
-4. **Model:** The agent calls an Amazon Bedrock foundation model for language understanding, reasoning and response generation.
-5. **Tool:** The agent calls `query_availability` with the structured filters. The tool is deterministic: it searches the dataset and returns matching records.
-6. **Data:** The tool reads `pos_availability.csv` from Amazon S3.
-7. **Response:** The agent writes the answer grounded in the returned records and sends it back through API Gateway to the user.
+1. **Web app:** The user opens https://xpand.medgan.ai, a Next.js static site hosted on AWS Amplify, and signs in. The browser authenticates against an Amazon Cognito user pool (Secure Remote Password), so the password never leaves the browser.
+2. **API:** The app calls Amazon API Gateway with the Cognito **ID token**. API Gateway validates it with a Cognito authorizer, checks the request shape, and applies throttling.
+3. **Runtime:** API Gateway forwards the request over HTTPS to Amazon Bedrock AgentCore Runtime with the same token. The runtime validates the JWT again (inbound JWT authorizer) before any code runs.
+4. **Dashboard:** `GET /dashboard` is answered by deterministic analytics over the POS data (no model call).
+5. **Assistant:** `POST /ask` goes to the Strands Availability Agent, which understands the question, extracts filters (product, pack size, city, area, store, availability) and decides whether to ask for clarification.
+6. **Model:** The agent calls an Amazon Bedrock foundation model (Nova 2 Lite) for understanding, reasoning and the written answer.
+7. **Tool:** The agent calls `query_availability`, a deterministic function that searches the dataset and returns matching records, ambiguity signals or "no match" hints.
+8. **Data:** The tool reads `pos_availability.csv` from Amazon S3. The ERP pipeline that produces this file is out of scope.
+9. **Response:** A deterministic check verifies that every store, price and quantity in the answer appears in the returned records (one corrective retry, then a records-only fallback). The answer and the exact records go back to the user.
 
 ## Services
 
 | Service | Purpose |
 |---|---|
-| AWS Amplify | Hosts the simple internal web UI where marketing submits questions |
-| Amazon API Gateway | Internal API / demo interface: an access layer in front of the agent, not the core solution |
-| Amazon Bedrock AgentCore Runtime | Managed runtime that hosts the Strands agent |
+| AWS Amplify | Hosts the web UI at xpand.medgan.ai (static export, security headers, custom domain through the existing Route 53 hosted zone) |
+| Amazon Cognito | User pool for sign-in (self sign-up disabled, demo user created by an administrator) |
+| Amazon API Gateway | Internal API in front of the agent: Cognito authorizer, request validation, throttling, CORS |
+| Amazon Bedrock AgentCore Runtime | Managed runtime that hosts the Strands agent and the dashboard analytics |
 | Strands Agents | Agent framework: interpretation, filter extraction, clarification, tool calling |
-| Amazon Bedrock (foundation model) | Natural-language understanding, reasoning and response generation |
+| Amazon Bedrock (Nova 2 Lite) | Language understanding, reasoning and answer generation |
 | `query_availability` | Deterministic retrieval tool over the POS data |
-| Amazon S3 (POS Availability Dataset) | Holds `pos_availability.csv`: structured POS availability data used by the query tool, the source of truth |
-| AgentCore Observability, Amazon CloudWatch | Agent traces, tool calls, logs, errors and latency metrics |
-| AWS IAM | Least-privilege permissions for the agent to access Bedrock and S3 |
+| Amazon S3 | Holds `pos_availability.csv`, the source of truth |
+| AgentCore Observability, Amazon CloudWatch | Structured logs, traces (OpenTelemetry), metrics |
+| AWS IAM | Least-privilege execution role: Bedrock model invocation and read of one S3 object |
 
 ## Key design decisions
 
-- **LLM / agent = interpretation and reasoning.** The model decides what is being asked; it never looks up availability itself.
+- **LLM / agent = interpretation and reasoning.** The model decides what is asked; it never looks up availability itself.
 - **`query_availability` = deterministic retrieval.** The same filters always return the same records.
-- **S3 POS data = source of truth.** The answer is grounded in the returned records.
-- **Intentionally lean.** The data is structured tabular POS data, so there is no vector database, RAG pipeline, DynamoDB, Lambda, EventBridge, Cognito, VPC or MCP.
-- **ERP ingestion is out of scope.** The POS data is already supplied to marketing from the ERP system, so the diagram shows the pipeline as a dashed box and does not implement it.
+- **S3 POS data = source of truth.** Answers are grounded in the returned records, and the UI shows those records next to the answer.
+- **No Lambda.** API Gateway cannot call AgentCore through an AWS service integration, but a plain HTTPS integration that forwards the Cognito token works, and AgentCore validates the JWT itself.
+- **Intentionally lean.** The data is structured tabular POS data, so there is no vector database, RAG pipeline, DynamoDB, Lambda, EventBridge, VPC or MCP.
+- **ERP ingestion is out of scope.** The POS data is already supplied to marketing from the ERP system.
