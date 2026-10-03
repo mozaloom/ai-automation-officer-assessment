@@ -2,14 +2,13 @@ import React from "react";
 
 interface CardProps {
   className?: string;
-  hover?: boolean;
-  padding?: "sm" | "md" | "lg" | "none";
+  padding?: "sm" | "md" | "none";
   children: React.ReactNode;
-  as?: "div" | "article" | "section" | "li";
 }
 
-const paddingStyles = { none: "", sm: "p-4", md: "p-6", lg: "p-8" };
+const paddingStyles = { none: "", sm: "p-4", md: "p-5" };
 
-export default function Card({ className = "", hover = false, padding = "md", children, as: Tag = "div" }: CardProps) {
-  return <Tag className={`bg-white rounded-2xl shadow-card ${paddingStyles[padding]} ${hover ? "card-hover cursor-default" : ""} ${className}`}>{children}</Tag>;
+/** A bordered surface for the few things that need to read as one object (the chat). Everything else uses spacing and hairlines. */
+export default function Card({ className = "", padding = "md", children }: CardProps) {
+  return <div className={`rounded-xl border border-line bg-white ${paddingStyles[padding]} ${className}`}>{children}</div>;
 }

@@ -4,7 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 POOL_ID="${USER_POOL_ID:-$(python3 -c "import json;print(json.load(open('$ROOT/build/outputs.json'))['PosAvailabilityStack']['UserPoolId'])")}"
-EMAIL="${DEMO_EMAIL:-demo@xpand.medgan.ai}"
+EMAIL="${DEMO_EMAIL:-demo@xpandpros.com}"
 PASSWORD="${DEMO_PASSWORD:-$(python3 -c "import secrets,string;a=string.ascii_letters+string.digits;print(''.join(secrets.choice(a) for _ in range(14))+'-Xp9!')")}"
 
 if ! aws cognito-idp admin-get-user --user-pool-id "$POOL_ID" --username "$EMAIL" >/dev/null 2>&1; then

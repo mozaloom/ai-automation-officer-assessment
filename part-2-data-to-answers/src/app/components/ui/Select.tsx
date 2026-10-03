@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "children"> {
   label?: string;
@@ -7,11 +7,12 @@ interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>
 }
 
 export default function Select({ label, options, emptyLabel, className = "", id, ...rest }: SelectProps) {
-  const selectId = id ?? rest.name;
+  const generated = useId();
+  const selectId = id ?? rest.name ?? generated;
   return (
-    <div className="flex flex-col gap-1.5">
-      {label && <label htmlFor={selectId} className="text-xs font-semibold uppercase tracking-wide text-text-gray">{label}</label>}
-      <select id={selectId} className={`w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-text-dark shadow-sm transition-colors focus:border-brand-blue/40 focus:outline-none focus:ring-1 focus:ring-brand-blue/30 ${className}`} {...rest}>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {label && <label htmlFor={selectId} className="text-xs font-medium text-text-gray">{label}</label>}
+      <select id={selectId} className={`h-10 w-full min-w-0 rounded-md border border-[#d0d5dd] bg-white px-3 text-sm text-text-dark transition-colors hover:border-[#9aa3d6] focus-visible:border-brand-blue focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-blue/15 ${className}`} {...rest}>
         {emptyLabel && <option value="">{emptyLabel}</option>}
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>

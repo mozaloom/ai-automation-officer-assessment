@@ -3,36 +3,38 @@
 /* Layout, type and component patterns come from the Clarity front end; the colours are the XPAND brand
    (xpandpros.com: primary #2D368F, near-black #1E1E1E, greys #797B82 / #E5EAEE, logo cyan #21C1DC). */
 @theme {
-  --color-brand-blue: #2D368F;   /* XPAND primary */
-  --color-brand-purple: #1F2564; /* deeper XPAND navy: hovers and highlights */
-  --color-brand-cyan: #21C1DC;   /* accent from the XPAND logo */
-  --color-brand-lavender: #B8BDE3; /* soft tint of the primary */
+  --color-brand-blue: #2D368F;   /* XPAND primary: the one accent */
+  --color-brand-purple: #1F2564; /* deeper XPAND navy */
+  --color-brand-cyan: #21C1DC;   /* from the XPAND logo, sign-in artwork only */
+  --color-brand-lavender: #B8BDE3;
   --color-brand-bg: #FFFFFF;
   --color-text-dark: #1E1E1E;
-  --color-text-gray: #6B7280;
-  --color-text-light: #717685;
+  --color-text-gray: #5F6470;
+  --color-text-light: #6B7080;
+  --color-line: #E5EAEE;
+  --color-wash: #F6F7F9;
 
-  /* Availability states (used by badges and charts) */
+  /* Availability states: colour is reserved for these */
   --color-stock-in: #10B981;
   --color-stock-low: #F59E0B;
   --color-stock-out: #EF4444;
 
   --font-sans: var(--font-inter), 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 
-  --shadow-card: 0 2px 8px 0 rgb(45 54 143 / 0.07);
-  --shadow-card-hover: 0 8px 32px 0 rgb(45 54 143 / 0.18);
-  --shadow-section: 0 4px 24px 0 rgb(45 54 143 / 0.10);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-:root {
-  --background: #FFFFFF;
-  --foreground: #1E1E1E;
-}
+/* Arabic / RTL typography (same face as Clarity and medgan.ai): swap the sans stack when the document is RTL. */
+[dir="rtl"] { --font-sans: var(--font-arabic), 'IBM Plex Sans Arabic', ui-sans-serif, system-ui, sans-serif; }
+/* Arabic text inside an LTR page (the language switch label) needs the Arabic face too. */
+.font-arabic { font-family: var(--font-arabic), 'IBM Plex Sans Arabic', ui-sans-serif, system-ui, sans-serif; }
+
+:root { --background: #FFFFFF; --foreground: #1E1E1E; color-scheme: light; }
 
 html {
-  scroll-behavior: smooth;
   overflow-x: clip;
   font-size: clamp(16px, calc(16px + (100vw - 1440px) * 0.005), 22px);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -43,8 +45,12 @@ body {
   overflow-x: clip;
 }
 
-h1, h2, h3, h4, h5, h6 { font-weight: 700; }
+h1, h2, h3, h4, h5, h6 { font-weight: 700; text-wrap: balance; }
 body, p, span, li, a { font-weight: 400; }
+p, li { text-wrap: pretty; }
+
+/* Taps act immediately (no double-tap zoom delay) on everything clickable. */
+a, button, input, select, textarea, summary, [role="button"] { touch-action: manipulation; }
 
 .skip-nav {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -53,7 +59,7 @@ body, p, span, li, a { font-weight: 400; }
 .skip-nav:focus {
   position: fixed; inset-inline-start: 0; top: 0; width: auto; height: auto; margin: 0;
   clip: auto; overflow: visible; white-space: normal; padding: 0.5rem 1rem;
-  background: #2D368F; color: white; font-weight: 600; border-radius: 0 0 0.5rem 0;
+  background: #2D368F; color: white; font-weight: 600; border-end-end-radius: 0.5rem;
 }
 
 @media (max-width: 640px) {
@@ -67,13 +73,11 @@ body, p, span, li, a { font-weight: 400; }
 ::-webkit-scrollbar-thumb { background: #B8BDE3; border-radius: 3px; }
 ::selection { background: rgba(33, 193, 220, 0.25); color: #14121c; }
 
-@keyframes slide-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.animate-slide-up { animation: slide-up 0.6s ease-out both; }
-.animate-fade-in { animation: fade-in 0.5s ease-out both; }
+/* New content (a chat message, a result row) eases in once. Nothing else on the product pages animates. */
+@keyframes enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.enter { animation: enter 160ms var(--ease-out) both; }
 
-/* Sign-in panel motion (from the Clarity hero): slowly sliding wave layers and drifting colour blobs.
-   Disabled by the reduced-motion block at the end of this file. */
+/* Sign-in panel motion (from the Clarity hero): slowly sliding wave layers and drifting colour blobs. */
 @keyframes wave-slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .animate-wave-1 { animation: wave-slide 18s linear infinite; }
 .animate-wave-2 { animation: wave-slide 26s linear infinite; }
@@ -85,19 +89,13 @@ body, p, span, li, a { font-weight: 400; }
 .animate-blob-b { animation: blob-b 19s ease-in-out infinite; }
 .animate-blob-c { animation: blob-c 16s ease-in-out infinite; }
 
-.card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease; }
-.card-hover:hover { transform: translateY(-4px); box-shadow: var(--shadow-card-hover); }
-
-.gradient-text {
-  background: linear-gradient(135deg, #2D368F 0%, #21C1DC 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-}
-
 /* Typed characters and the password mask must always render (browser autofill can paint them invisible). */
 input[type='password'] { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.08em; }
 input:-webkit-autofill { -webkit-text-fill-color: #1E1E1E; box-shadow: 0 0 0 1000px #f9fafb inset; }
 
+/* Numbers always read left to right, even inside Arabic sentences (prices, quantities, dates with Western digits). */
+.ltr-num { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
