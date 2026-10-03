@@ -107,3 +107,30 @@ def dashboard(dataset: PosDataset, *, city: str | None = None, category: str | N
         "at_risk_stores": risky_stores[:AT_RISK_LIMIT],
         "freshness": [{"date": d, "count": n} for d, n in sorted(freshness.items())],
     }
+
+
+RECORDS_LIMIT = 200
+
+
+def records_view(dataset: PosDataset, *, city=None, category=None, status=None, product=None, store=None, limit: int = RECORDS_LIMIT) -> dict:
+    """The POS records behind a dashboard row (drill-down). Exact, case-insensitive matches on canonical names; no LLM."""
+    wanted = {"city": city, "category": category, "product_name": product, "store_name": store}
+    filters: dict[str, str] = {}
+    records = list(dataset.records)
+    for field, value in wanted.items():
+        if value and value.strip():
+            filters[field] = value.strip()
+            records = [r for r in records if getattr(r, field).lower() == value.strip().lower()]
+    if status and status.strip():
+        state = normalize_status(status)
+        filters["status"] = state or status.strip()
+        records = [r for r in records if state and r.availability_status == state]
+    rank = {s: i for i, s in enumerate(STATUSES)}
+    records.sort(key=lambda r: (rank[r.availability_status], r.city, r.store_name, r.product_name, r.pack_size))
+    return {
+        "filters": filters,
+        "total": len(records),
+        "truncated": len(records) > limit,
+        "records": [r.to_public() for r in records[:limit]],
+        "data_as_of": max((r.last_updated for r in records), default=dataset.as_of).isoformat(),
+    }

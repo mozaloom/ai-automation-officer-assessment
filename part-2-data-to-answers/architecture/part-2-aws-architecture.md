@@ -7,14 +7,14 @@ A marketing user signs in to an internal web app, sees a POS availability dashbo
 ## Flow
 
 1. **Web app:** The user opens https://xpand.medgan.ai, a Next.js static site hosted on AWS Amplify, and signs in. The browser authenticates against an Amazon Cognito user pool (Secure Remote Password), so the password never leaves the browser.
-2. **API:** The app calls Amazon API Gateway with the Cognito **ID token**. API Gateway validates it with a Cognito authorizer, checks the request shape, and applies throttling.
-3. **Runtime:** API Gateway forwards the request over HTTPS to Amazon Bedrock AgentCore Runtime with the same token. The runtime validates the JWT again (inbound JWT authorizer) before any code runs.
-4. **Dashboard:** `GET /dashboard` is answered by deterministic analytics over the POS data (no model call).
+2. **API:** The app calls Amazon API Gateway with the Cognito **ID token** (`Authorization: Bearer ...`). API Gateway validates it with a Cognito authorizer, checks the request shape, and applies throttling.
+3. **Runtime:** API Gateway forwards the request over HTTPS to Amazon Bedrock AgentCore Runtime with the same token. `/ask` is a pass-through (HTTP_PROXY) integration with response streaming, so the answer reaches the browser as it is written. The runtime validates the JWT again (inbound JWT authorizer) before any code runs.
+4. **Dashboard:** `GET /dashboard` and `GET /records` (the drill-down) are answered by deterministic analytics over the POS data (no model call).
 5. **Assistant:** `POST /ask` goes to the Strands Availability Agent, which understands the question, extracts filters (product, pack size, city, area, store, availability) and decides whether to ask for clarification.
 6. **Model:** The agent calls an Amazon Bedrock foundation model (Nova 2 Lite) for understanding, reasoning and the written answer.
 7. **Tool:** The agent calls `query_availability`, a deterministic function that searches the dataset and returns matching records, ambiguity signals or "no match" hints.
 8. **Data:** The tool reads `pos_availability.csv` from Amazon S3. The ERP pipeline that produces this file is out of scope.
-9. **Response:** A deterministic check verifies that every store, price and quantity in the answer appears in the returned records (one corrective retry, then a records-only fallback). The answer and the exact records go back to the user.
+9. **Response:** The records are sent first, then the text streams. A deterministic check (English and Arabic) verifies that every store, price and quantity in the finished answer appears in the returned records; if not, the draft is reset for one corrective retry, then replaced by a records-only fallback. Questions can be in English, Modern Standard Arabic or Jordanian dialect; Arabic names resolve through a shared glossary before searching.
 
 ## Services
 

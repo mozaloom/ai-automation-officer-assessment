@@ -97,14 +97,19 @@ The web app reads `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_COGNITO_USER_POOL_ID`
 
 ## API
 
-All routes need `Authorization: <Cognito ID token>`.
+All routes need `Authorization: Bearer <Cognito ID token>`.
 
 | Route | Purpose |
 |---|---|
 | `GET /dashboard?city=&category=&status=` | KPIs, status split, by city / category / store type, products and stores to watch, freshness |
-| `POST /ask` | Body `{"prompt": "..."}` (1 to 500 characters) plus header `x-session-id` (at least 33 characters, keeps a conversation together) |
+| `GET /records?city=&category=&status=&product=&store=` | The exact POS records behind a dashboard row (up to 200, `total` and `truncated` say if there are more); used by the drill-down panel |
+| `POST /ask` | Streams the answer as Server-Sent Events. Body `{"prompt": "...", "locale": "en"\|"ar"}` (prompt 1 to 500 characters) plus header `x-session-id` (at least 33 characters, keeps a conversation together) |
 
-`POST /ask` returns `answer`, `records` (the exact POS records the answer is based on), `queries` (the filters the agent used, with ambiguity or no-match details), `record_count`, `data_as_of` and `grounded`.
+`POST /ask` sends one JSON object per event: `start`, `status`, `records` (sent as soon as the tool returns, so the table can show before the text), `delta` (text pieces), `reset`/`replace` (the grounding check rewrote the draft), `done`, or `error`. `done` carries `answer`, `records` (the exact POS records the answer is based on), `queries` (the filters the agent used, with ambiguity or no-match details), `record_count`, `data_as_of` and `grounded`.
+
+## Web app features
+
+Dashboard: click a bar or state to filter (filters live in the URL), sort and search the watch lists, open any product or store to see its records in a side panel, hover for exact numbers, and open any section full screen. Assistant: answers stream with a Stop button; the matching records can be a collapsible, sortable, searchable table or a chart (group by city, area, store, product or state; measure count, quantity, average or lowest price) that opens by itself when the question asks for a chart; the chat and tables have a full-screen mode.
 
 ## Deployment (AWS)
 

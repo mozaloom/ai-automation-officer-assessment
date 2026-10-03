@@ -100,6 +100,7 @@ class AvailabilityStack(Stack):
 
     def _runtime(self, data_bucket: s3.Bucket, user_pool: cognito.UserPool, client: cognito.UserPoolClient, web_origin: str) -> agentcore.CfnRuntime:
         code = s3_assets.Asset(self, "AgentCode", path=str(ROOT / "build" / "agent.zip"))
+        self.code_version = code.asset_hash[:8]  # new code => new dashboard session id => a fresh microVM (a warm one would keep serving old code)
         role = iam.Role(
             self, "RuntimeRole",
             assumed_by=iam.ServicePrincipal(
@@ -199,6 +200,7 @@ class AvailabilityStack(Stack):
     # ------------------------------------------------------------------ API Gateway -> AgentCore Runtime
 
     def _api(self, runtime: agentcore.CfnRuntime, user_pool: cognito.UserPool, web_origin: str) -> apigw.RestApi:
+        dashboard_session = f"{DASHBOARD_SESSION}-{self.code_version}"
 
         cors_headers = {"method.response.header.Access-Control-Allow-Origin": f"'{web_origin}'", "method.response.header.Vary": "'Origin'"}
         method_cors = {"method.response.header.Access-Control-Allow-Origin": False, "method.response.header.Vary": False}
@@ -295,12 +297,28 @@ class AvailabilityStack(Stack):
         )
         api.root.add_resource("dashboard").add_method(
             "GET",
-            integration(dash_template, f"'{DASHBOARD_SESSION}'"),
+            integration(dash_template, f"'{dashboard_session}'"),
             authorizer=authorizer, authorization_type=apigw.AuthorizationType.COGNITO,
             request_validator=validator,
             request_parameters={
                 "method.request.header.Authorization": True,
                 "method.request.querystring.city": False, "method.request.querystring.category": False, "method.request.querystring.status": False,
+            },
+            method_responses=responses,
+        )
+
+        records_template = (
+            '{"action":"records","filters":{"city":"$util.escapeJavaScript($input.params(\'city\'))","category":"$util.escapeJavaScript($input.params(\'category\'))",'
+            '"status":"$util.escapeJavaScript($input.params(\'status\'))","product":"$util.escapeJavaScript($input.params(\'product\'))","store":"$util.escapeJavaScript($input.params(\'store\'))"}}'
+        )
+        api.root.add_resource("records").add_method(
+            "GET",
+            integration(records_template, f"'{dashboard_session}'"),
+            authorizer=authorizer, authorization_type=apigw.AuthorizationType.COGNITO,
+            request_validator=validator,
+            request_parameters={
+                "method.request.header.Authorization": True,
+                **{f"method.request.querystring.{k}": False for k in ("city", "category", "status", "product", "store")},
             },
             method_responses=responses,
         )

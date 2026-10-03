@@ -200,3 +200,20 @@ def test_invalid_bodies_are_rejected_with_400(cfg, token, body):
 
 def test_missing_session_header_is_rejected(cfg, token):
     assert call(cfg, "POST", "/ask", {"prompt": "hi"}, token)[0] == 400
+
+
+# ------------------------------------------------------------------ records (dashboard drill-down)
+
+
+def test_records_for_a_product_match_the_csv(cfg, token, raw_rows):
+    status, headers, body = call(cfg, "GET", "/records?product=Tahini&city=Amman", token=token)
+    expected = [r for r in raw_rows if r["product_name"] == "Tahini" and r["city"] == "Amman"]
+    assert status == 200 and headers.get("Access-Control-Allow-Origin") == ORIGIN
+    assert body["total"] == len(expected) == len(body["records"]) and not body["truncated"]
+    assert all("sales_rep" not in r for r in body["records"])
+
+
+def test_records_for_a_store_and_requires_a_token(cfg, token, raw_rows):
+    _, _, body = call(cfg, "GET", "/records?store=Sameh%20Mall%20Abdoun", token=token)
+    assert body["total"] == sum(1 for r in raw_rows if r["store_name"] == "Sameh Mall Abdoun")
+    assert call(cfg, "GET", "/records")[0] == 401
