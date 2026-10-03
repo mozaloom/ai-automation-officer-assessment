@@ -1,0 +1,17 @@
+[project]
+name = "pos-availability-agent"
+version = "0.1.0"
+description = "Part 2: Product Availability Agent (Strands on Bedrock AgentCore) with a POS dashboard"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "live: calls real Amazon Bedrock (needs AWS credentials, run with -m live)",
+    "e2e: calls the deployed API (needs API_URL and Cognito test credentials, run with -m e2e)",
+]
+addopts = "-m 'not live and not e2e' -q"
+
+[tool.coverage.run]
+source = ["src/tools", "src/agent", "src/config.py"]

@@ -1,0 +1,9 @@
+# Part 2 build and secrets
+.venv/
+build/
+cdk.out/
+.demo-credentials
+.env
+.coverage
+.pytest_cache/
+__pycache__/
