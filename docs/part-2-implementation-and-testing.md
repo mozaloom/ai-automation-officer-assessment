@@ -1,6 +1,6 @@
 # Part 2: Implementation and Testing
 
-Completes section 12 of the Part 2 submission document ([261003_MohammedZaloom_XPAND_P2_v1.0.docx](final-submission/261003_MohammedZaloom_XPAND_P2_v1.0.docx)), which was written before the build. Live at **https://xpand.medgan.ai**; code in [`part-2-data-to-answers`](../part-2-data-to-answers).
+Detail behind section 12 (*Implementation & Testing*) of the Part 2 submission document ([261003_MohammedZaloom_XPAND_P2_v1.0.pdf](final-submission/261003_MohammedZaloom_XPAND_P2_v1.0.pdf)). Live at **https://xpand.medgan.ai**; code in [`part-2-data-to-answers`](../part-2-data-to-answers).
 
 ## From design to what was built
 

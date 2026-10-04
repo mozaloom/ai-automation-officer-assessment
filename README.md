@@ -21,7 +21,7 @@ Take-home assignment with two independent scenarios. **Live demo of Part 2: http
 ├── part-1-email-to-clickup/    design: README, architecture diagram (draw.io, PNG, SVG, PDF) and guide
 ├── part-2-data-to-answers/     implementation: src/ (agent, tools, web app), tests/, infrastructure/ (AWS CDK), architecture/
 └── docs/
-    ├── final-submission/       the two submission documents (.docx)
+    ├── final-submission/       the two submission documents (PDF)
     ├── architecture/           workflow and architecture figures for both parts
     ├── screenshots/            the Part 2 app in English and Arabic
     └── part-2-implementation-and-testing.md
