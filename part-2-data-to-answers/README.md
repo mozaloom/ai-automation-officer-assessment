@@ -1,13 +1,19 @@
 # Part 2: Data to Answers (Product Availability Agent)
 
-Marketing keeps getting the same questions: *where can I buy this product, which shop carries it, is it in stock?* This part turns the supplied POS availability CSV into an internal web app with two things:
+Marketing keeps getting the same questions: *where can I buy this product, which shop carries it, is it in stock?* This part turns the supplied POS availability CSV into an internal web app, in **English and Arabic**, with two things:
 
-- an **Availability dashboard** (stock status by city, category, store and product, plus data freshness), and
-- an **Availability Assistant** that answers natural-language questions **only from the matching POS records**, which it shows next to the answer.
+- an **Availability dashboard** (stock status by city, category, store and product, plus data freshness) that you can filter, sort, search and drill into, and
+- an **Availability Assistant** that answers natural-language questions (English, Modern Standard Arabic or Jordanian dialect) **only from the matching POS records**, streaming the answer and showing the records next to it as a table or a chart.
 
 The ERP-to-marketing data pipeline is out of scope; the app starts from the supplied `data/pos_availability.csv`.
 
 **Live demo:** https://xpand.medgan.ai (sign-in required; see [Demo user](#demo-user)).
+
+| Dashboard (English) | Assistant (Arabic, right-to-left) |
+|---|---|
+| ![Dashboard](../docs/screenshots/en-dashboard.png) | ![Assistant in Arabic](../docs/screenshots/ar-assistant.png) |
+
+More screenshots (sign-in, Arabic dashboard, chart in chat, drill-down panel) are in [`../docs/screenshots`](../docs/screenshots).
 
 ![Architecture](architecture/part-2-aws-architecture.drawio.png)
 
@@ -21,9 +27,9 @@ Browser ──> AWS Amplify (xpand.medgan.ai)           static Next.js app, sign
    └─ ID token ─> Amazon API Gateway                Cognito authorizer, request validation, throttling, CORS
                      │  HTTPS + same token
                      └─> Bedrock AgentCore Runtime  validates the JWT again, runs the Python app
-                            ├─ GET  /dashboard  -> deterministic analytics (no model)
-                            └─ POST /ask        -> Strands agent ─> Amazon Bedrock (Nova 2 Lite)
-                                                      └─ query_availability (deterministic) ─> S3: pos_availability.csv
+                            ├─ GET  /dashboard, /records -> deterministic analytics and drill-down (no model)
+                            └─ POST /ask  (streamed)     -> Strands agent ─> Amazon Bedrock (Nova 2 Lite)
+                                                              └─ query_availability (deterministic) ─> S3: pos_availability.csv
 ```
 
 The design rule that keeps answers trustworthy:
@@ -54,8 +60,9 @@ part-2-data-to-answers/
 │   ├── config.py                      settings from environment variables
 │   ├── tools/                         availability.py (search), analytics.py (dashboard), grounding.py, strands_tool.py
 │   ├── agent/                         prompts.py, agent.py, service.py, runtime.py (AgentCore entrypoint), cli.py
-│   └── app/                           Next.js web app (login, dashboard, assistant)
-├── tests/                             unit/  live/  e2e/  sample_queries.json
+│   │                                  glossary.json: Arabic names and Jordanian aliases for every store, area, product...
+│   └── app/                           Next.js web app: /en and /ar routes (login, dashboard, assistant)
+├── tests/                             unit/  live/  e2e/  sample_queries.json, sample_queries_ar.json
 ├── infrastructure/                    CDK stack + deploy scripts
 ├── architecture/                      diagram (drawio, png, svg, pdf) and guide
 └── Makefile
@@ -125,7 +132,7 @@ What it creates, all prefixed `pos-availability`:
 - **S3** bucket for the CSV (private, encrypted, versioned, TLS only).
 - **AgentCore Runtime** from a zipped arm64 package, with OpenTelemetry observability on, and a least-privilege execution role (Bedrock invoke for the one model, read of the one S3 object, logs, traces, metrics).
 - **Cognito** user pool (self sign-up disabled) and a browser app client without a secret.
-- **API Gateway** REST API: Cognito authorizer, JSON-schema request validation, throttling (10 requests per second, burst 20), CORS limited to `https://xpand.medgan.ai`. It forwards to AgentCore over HTTPS with the user's token; AgentCore validates the JWT itself. No Lambda is needed.
+- **API Gateway** REST API: Cognito authorizer, JSON-schema request validation, throttling (10 requests per second, burst 20), CORS limited to `https://xpand.medgan.ai`. It forwards to AgentCore over HTTPS with the user's token (`/ask` as a streaming pass-through, the others through a mapping template); AgentCore validates the JWT itself. No Lambda is needed.
 - **Amplify** app (static export, manual deployments) with security headers (CSP, HSTS, frame denial) and the custom domain **xpand.medgan.ai**. Amplify manages the certificate and creates its own records in the existing `medgan.ai` Route 53 zone.
 
 > API Gateway cannot call AgentCore through an AWS-service integration (CloudFormation rejects it), which is why the stack uses a plain HTTPS integration with JWT forwarding.
@@ -147,11 +154,11 @@ Sign-up is disabled; add users with `aws cognito-idp admin-create-user`.
 
 | Command | What it covers | Needs AWS |
 |---|---|---|
-| `make test` | 126 backend unit tests: search, ambiguity, no-match, pack sizes, states, freshness, dashboard numbers vs the CSV, grounding check, service, S3 loader | no |
-| `make test-live` | 22 realistic questions against real Bedrock, with grounding checks (every store, price and quantity must come from the returned records) | yes |
-| `make test-e2e` | 15 API tests against the deployed stack: auth, validation, CORS, dashboard = CSV, grounded answers, clarification follow-up | yes |
-| `make web-test` | Type check, lint and 56 front-end unit tests | no |
-| `make web-e2e` | 7 browser tests (Playwright): login, wrong password, dashboard numbers = CSV, filters, assistant answer and clarification, sign-out, phone layout, animated sign-in panel. `BASE_URL=https://xpand.medgan.ai make web-e2e` runs them against production | yes |
+| `make test` | 188 backend unit tests (95% coverage): search, ambiguity, no-match, pack sizes, states, freshness, dashboard numbers vs the CSV, Arabic normalisation and aliases, grounding check in both languages, streaming events, records drill-down, service, S3 loader | no |
+| `make test-live` | 36 realistic questions against real Bedrock (22 English, 14 Arabic/dialect), with grounding checks (every store, price and quantity must come from the returned records). Arabic cases may retry once: model output varies, and the guard turns a rare ungrounded answer into a safe fallback | yes |
+| `make test-e2e` | 20 API tests against the deployed stack: auth, validation, CORS, dashboard = CSV, streamed answers arrive incrementally and are grounded (English and Arabic), clarification follow-up, abort, records drill-down | yes |
+| `make web-test` | Type check, lint and 159 front-end unit tests (i18n key parity, Arabic glossary vs the data, right-to-left class ban, SSE parser, chat state machine, charts, interactive tables) | no |
+| `make web-e2e` | 17 browser tests (Playwright) in English and Arabic: language detection and toggle, sign-in, dashboard numbers = CSV, click-to-filter, sort/search, drill-down, full screen, streamed assistant answer, chart in chat, sign-out, phone layout, animated sign-in panel. `BASE_URL=https://xpand.medgan.ai make web-e2e` runs them against production | yes |
 
 Realistic questions used by the live tests are in `tests/sample_queries.json`:
 
@@ -183,13 +190,17 @@ Realistic questions used by the live tests are in `tests/sample_queries.json`:
 ## Cost and limits
 
 - Costs are per request (Bedrock tokens, AgentCore runtime time, API Gateway) plus a little S3 and Amplify; there is no always-on compute. API throttling bounds spend.
-- API Gateway's integration timeout is 29 seconds; typical answers take about 3 to 9 seconds, a cold start adds a few seconds.
+- Answers stream (first text in about 2 seconds, complete answers in 3 to 9 seconds; a cold start adds a few seconds). The streaming integration allows up to 120 seconds.
 - Availability is the latest recorded POS data, not live inventory.
 - `sales_rep` is deliberately not exposed.
 - The data is one CSV read from S3 and cached for 5 minutes. A larger or frequently changing dataset would call for a query engine instead of in-memory filtering.
 
-## Streaming and languages
+## Streaming and languages (details)
 
 - `/ask` streams Server-Sent Events (API Gateway HTTP_PROXY with response streaming straight to the AgentCore runtime). Events: `start`, `status`, `records`, `delta`, `reset`, `replace`, `done`, `error`. The records table arrives before the text; the grounding check runs on the finished text and can `reset`/`replace` it.
 - Send `Authorization: Bearer <Cognito ID token>` on every call, plus `x-session-id`; body `{"prompt", "locale": "en"|"ar"}`.
-- The web app is bilingual at `/en/` and `/ar/` (the root opens in the browser language; the choice is remembered). Arabic is clear MSA with Jordanian wording; the assistant also understands Jordanian dialect. Names and aliases live in `src/tools/glossary.json` (copied to `src/app/lib/i18n/glossary.json`; a test fails if they drift). The Arabic copy still needs a native proofread.
+- The web app is bilingual at `/en/` and `/ar/` (the root opens in the browser language; the choice is remembered). Arabic is clear MSA with Jordanian wording; the assistant also understands Jordanian dialect. Names and aliases live in `src/tools/glossary.json` (copied to `src/app/lib/i18n/glossary.json`; a test fails if they drift). The Arabic copy should get a native Jordanian proofread before wider use.
+
+## Further reading
+
+The design documents (Part 2 submission document, workflow figures) and the Part 2 implementation notes are in [`../docs`](../docs).
