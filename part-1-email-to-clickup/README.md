@@ -20,13 +20,13 @@ More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-d
 | DynamoDB idempotency and conditional writes | Verified | moto contract tests plus a concurrency test against the **real** table |
 | Cognito reviewer-group authorization | Verified | deployed tests with a real non-reviewer Cognito user |
 | Inbox, Review queue and Activity UI (en/ar, phone) | Verified | 175 web unit tests, 8 Playwright tests on production |
-| **Microsoft Graph / Outlook** | **Not verified live** | Adapter and OAuth flow are implemented and unit-tested with fake HTTP only. The deployed app runs on the **clearly labelled sample mailbox** (a SAMPLE MODE banner shows in the UI). Blocker below |
+| **Microsoft Graph / Outlook** | **Verified for reading** | Device-code sign-in as `xpand@medgan.ai` done; the deployed app runs with `inbox_outlook_mode=graph`. A real **Sync inbox** read two real messages and the agent classified both `IGNORE` (ClickUp notifications). Drafting and sending are **not yet exercised against the real mailbox** |
 | Graph change notifications (webhook) and subscription renewal | Not implemented | Ingestion is the manual **Sync inbox** action |
-| Sending a real Outlook reply | Not verified | The send path is tested against the sample mailbox and fake Graph HTTP; no real mail has been sent |
+| Sending a real Outlook reply | Not verified | The send path is tested against the sample mailbox and fake Graph HTTP; no real mail has been sent or drafted |
 
-### Blocker: connecting the real mailbox
+### Mailbox connection
 
-The Azure CLI on the build machine is signed in to a personal Microsoft account, not the `medgan.ai` tenant, so no app could be registered or consented. Someone who can register apps in the `medgan.ai` Entra tenant must do the 5 steps in [Microsoft Graph setup](#microsoft-graph-setup); then switch the deployment to `inbox_outlook_mode=graph` and run **Sync inbox**. Until then the demo uses the sample mailbox and says so on screen.
+The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). Still open: a real draft/send, and Graph webhooks.
 
 ## The five actions
 
