@@ -20,13 +20,13 @@ More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-d
 | DynamoDB idempotency and conditional writes | Verified | moto contract tests plus a concurrency test against the **real** table |
 | Cognito reviewer-group authorization | Verified | deployed tests with a real non-reviewer Cognito user |
 | Inbox, Review queue and Activity UI (en/ar, phone) | Verified | 175 web unit tests, 8 Playwright tests on production |
-| **Microsoft Graph / Outlook** | **Verified for reading** | Device-code sign-in as `xpand@medgan.ai` done; the deployed app runs with `inbox_outlook_mode=graph`. A real **Sync inbox** read two real messages and the agent classified both `IGNORE` (ClickUp notifications). Drafting and sending are **not yet exercised against the real mailbox** |
+| **Microsoft Graph / Outlook** | **Verified for reading** | Device-code sign-in as `xpand@medgan.ai` done; the deployed app runs with `inbox_outlook_mode=graph`. Real **Sync inbox** runs: ClickUp notifications were classified `IGNORE`; a real "create a task" email was reviewed, edited and approved into a real ClickUp task; a real "please confirm" email produced a `REPLY` proposal that, once approved, was **sent from `xpand@medgan.ai` and received** in the sender's inbox |
 | Graph change notifications (webhook) and subscription renewal | Not implemented | Ingestion is the manual **Sync inbox** action |
-| Sending a real Outlook reply | Not verified | The send path is tested against the sample mailbox and fake Graph HTTP; no real mail has been sent or drafted |
+| Sending a real Outlook reply | **Verified** | One approved reply sent through Graph and received; replies are never sent without a reviewer's approval |
 
 ### Mailbox connection
 
-The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). Still open: a real draft/send, and Graph webhooks.
+The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). Still open: Graph webhooks (sync is manual) and updating the deployed e2e tests, which assume the sample mailbox.
 
 ## The five actions
 
