@@ -39,6 +39,25 @@ class MailAdapter(Protocol):
     def send_reply(self, message_id: str, body: str) -> dict: ...  # sends; the service calls it only after approval
 
 
+def http_form(url: str, data: dict, timeout: float = 15.0) -> tuple[int, Any]:
+    """POST application/x-www-form-urlencoded (the OAuth token endpoint's format)."""
+    import urllib.parse
+
+    request = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode(), method="POST", headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as err:
+        try:
+            return err.code, json.loads(err.read() or b"{}")
+        except ValueError:
+            return err.code, {}
+    except (socket.timeout, TimeoutError):
+        raise AdapterError("timeout", "the sign-in service did not answer in time", retryable=True) from None
+    except urllib.error.URLError as err:
+        raise AdapterError("network", f"could not reach the sign-in service: {type(err.reason).__name__}", retryable=True) from None
+
+
 HttpFn = Callable[[str, str, dict, Optional[dict], float], tuple[int, Any]]
 
 

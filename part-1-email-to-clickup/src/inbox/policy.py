@@ -43,10 +43,11 @@ def decide(triage: Triage, email: Email, resolved: Optional[ResolvedTask], match
         reasons.append(f"low confidence ({triage.confidence:.2f} < {config.min_confidence:.2f})")
 
     if action == Action.REPLY:
-        recipients = triage.reply.to if triage.reply and triage.reply.to else [email.sender]
+        # The reply goes to the ORIGINAL SENDER (that is what Graph's reply does). The agent's own `to` list is not trusted for this check:
+        # judging the model's claimed recipients instead of the real one would let a manipulated output hide an external send.
         if not config.auto_send_replies:
             reasons.append("replies need approval before sending")
-        elif any(is_external(r, config) for r in recipients):
+        elif is_external(email.sender, config):
             reasons.append("external recipient needs approval")
         return Decision("review" if reasons else "auto", action, reasons)
 

@@ -122,3 +122,15 @@ def test_triage_schema_rejects_inconsistent_output():
     assert ok.task.title == "Hello" and ok.task.assignee is None and ok.task.due_date == date(2026, 10, 25)
     with pytest.raises(Exception):
         TaskDraft(priority="whenever")
+
+
+def test_the_external_check_uses_the_real_recipient_not_the_agents_claim():
+    from dataclasses import replace
+    from inbox.models import ReplyDraft
+    cfg = replace(PolicyConfig(), auto_send_replies=True)
+    lie = Triage(action=Action.REPLY, confidence=0.99, reply=ReplyDraft(body="Sure", to=["colleague@medgan.ai"]))  # claims an internal recipient
+    external_sender = make_email(sender="stranger@outside.com")
+    assert decide(lie, external_sender, None, [], cfg).route == "review"
+    assert decide(lie, make_email(sender="khaled@medgan.ai"), None, [], cfg).route == "auto"
+    spoof = make_email(sender="x@medgan.ai.evil.com")
+    assert is_external(spoof.sender, cfg) and decide(lie, spoof, None, [], cfg).route == "review"
