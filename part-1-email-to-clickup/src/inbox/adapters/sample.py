@@ -37,6 +37,7 @@ class SampleMail(_Failures):
         self.emails: list[Email] = emails if emails is not None else [Email.model_validate(e) for e in raw]
         self.drafts: list[dict] = []
         self.sent: list[dict] = []
+        self.discarded: list[str] = []
 
     def add(self, email: Email) -> None:
         self.emails.append(email)
@@ -57,10 +58,14 @@ class SampleMail(_Failures):
         self.drafts.append({"message_id": message_id, "body": body})
         return {"draft_id": f"draft-{len(self.drafts)}"}
 
-    def send_reply(self, message_id: str, body: str) -> dict:
+    def send_reply(self, message_id: str, body: str, draft_id: Optional[str] = None) -> dict:
         self._maybe("send_reply")
-        self.sent.append({"message_id": message_id, "body": body})
-        return {"sent": True}
+        self.sent.append({"message_id": message_id, "body": body, "draft_id": draft_id})
+        return {"sent": True, "via": "draft" if draft_id else "reply"}
+
+    def discard_draft(self, draft_id: str) -> None:
+        self._maybe("discard_draft")
+        self.discarded.append(draft_id)
 
 
 class SampleTasks(_Failures):
@@ -107,7 +112,8 @@ class SampleTasks(_Failures):
         due = fields.get("due_date")
         task = {"id": f"t{self._seq}", "name": fields["name"], "description": fields.get("description") or "", "url": f"https://app.clickup.com/t/t{self._seq}",
                 "status": fields.get("status") or self.statuses[0], "assignees": [member.username] if member else [], "assignee_ids": [member.id] if member else [],
-                "priority": {1: "urgent", 2: "high", 3: "normal", 4: "low"}.get(fields.get("priority")), "due_date": due.isoformat() if isinstance(due, date) else None}
+                "priority": {1: "urgent", 2: "high", 3: "normal", 4: "low"}.get(fields.get("priority")), "due_date": due.isoformat() if isinstance(due, date) else None,
+                "custom": {k: v for k, v in (fields.get("custom") or {}).items() if v not in (None, "")}}
         self.tasks[task["id"]] = task
         self.created.append(deepcopy(task))
         return deepcopy(task)

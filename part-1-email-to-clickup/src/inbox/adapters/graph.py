@@ -19,7 +19,7 @@ from .base import AdapterError, HttpFn, http_form, http_json
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 SCOPE = "Mail.ReadWrite Mail.Send offline_access User.Read"
-SELECT = "id,internetMessageId,subject,from,toRecipients,receivedDateTime,body,conversationId,hasAttachments"
+SELECT = "id,internetMessageId,subject,from,toRecipients,receivedDateTime,body,conversationId,hasAttachments,webLink"
 
 
 class SecretBox(Protocol):
@@ -101,7 +101,7 @@ class GraphAdapter:
             message_id=message_id, sender=sender.get("address") or "unknown@unknown", sender_name=sender.get("name") or "",
             to=[r["emailAddress"]["address"] for r in m.get("toRecipients", []) if r.get("emailAddress", {}).get("address")],
             subject=(m.get("subject") or "")[:998], body=_text(body.get("content", ""), body.get("contentType", "text"))[:20000],
-            received_at=datetime.fromisoformat(m["receivedDateTime"].replace("Z", "+00:00")), conversation_id=m.get("conversationId"), has_attachments=bool(m.get("hasAttachments")),
+            received_at=datetime.fromisoformat(m["receivedDateTime"].replace("Z", "+00:00")), conversation_id=m.get("conversationId"), has_attachments=bool(m.get("hasAttachments")), web_link=m.get("webLink") or None,
         )
 
     def list_recent_emails(self, limit: int = 25) -> list[Email]:
@@ -128,10 +128,29 @@ class GraphAdapter:
         self._call("PATCH", f"/me/messages/{draft['id']}", {"body": {"contentType": "Text", "content": body}}, safe_to_retry=False)
         return {"draft_id": draft["id"]}
 
-    def send_reply(self, message_id: str, body: str) -> dict:
-        """Sends a reply. Called by the service only for an approved (or policy-permitted) proposal; never retried automatically."""
+    def send_reply(self, message_id: str, body: str, draft_id: Optional[str] = None) -> dict:
+        """Sends a reply. Called by the service only for an approved (or policy-permitted) proposal; never retried automatically.
+
+        With a draft, the draft itself is sent (after its text is set to the reviewer's final wording), so no orphan draft is left behind.
+        Without one, or when the draft was deleted meanwhile, a fresh reply is sent."""
+        if draft_id:
+            try:
+                self._call("PATCH", f"/me/messages/{draft_id}", {"body": {"contentType": "Text", "content": body}}, safe_to_retry=False)
+                self._call("POST", f"/me/messages/{draft_id}/send", None, safe_to_retry=False)
+                return {"sent": True, "via": "draft"}
+            except AdapterError as err:
+                if err.code != "graph_404":
+                    raise
         self._call("POST", f"/me/messages/{self._graph_id(message_id)}/reply", {"comment": body}, safe_to_retry=False)
-        return {"sent": True}
+        return {"sent": True, "via": "reply"}
+
+    def discard_draft(self, draft_id: str) -> None:
+        """Deletes a reply draft that will never be sent (the reviewer rejected it). A draft that is already gone is fine."""
+        try:
+            self._call("DELETE", f"/me/messages/{draft_id}", safe_to_retry=False)
+        except AdapterError as err:
+            if err.code != "graph_404":
+                raise
 
     # ------------------------------------------------------------------ change notifications (webhooks)
 

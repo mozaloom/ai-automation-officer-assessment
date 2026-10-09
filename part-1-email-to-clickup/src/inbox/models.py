@@ -45,6 +45,7 @@ class Email(BaseModel):
     received_at: datetime
     conversation_id: Optional[str] = None
     has_attachments: bool = False
+    web_link: Optional[str] = None  # a link that opens the message in the mailbox (Outlook on the web)
 
 
 class TaskDraft(BaseModel):
