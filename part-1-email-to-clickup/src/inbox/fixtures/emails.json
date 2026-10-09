@@ -1,0 +1,90 @@
+[
+ {
+  "message_id": "sample-001",
+  "sender": "layla.omar@medgan.ai",
+  "sender_name": "Layla Omar",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Q4 sales report",
+  "body": "Hi, please prepare the Q4 sales report and send it to Ahmad Haddad by 2026-10-25. Assign this to Sara Nasser. It is high priority because the board meets that week.",
+  "received_at": "2026-10-05T08:30:00Z"
+ },
+ {
+  "message_id": "sample-002",
+  "sender": "ahmad@medgan.ai",
+  "sender_name": "Ahmad Haddad",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Re: report",
+  "body": "Thanks for sending the report, it looks great.",
+  "received_at": "2026-10-06T08:30:00Z"
+ },
+ {
+  "message_id": "sample-003",
+  "sender": "omar.q@medgan.ai",
+  "sender_name": "Omar Qasem",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Client issue",
+  "body": "Can someone take care of the client issue? We need to look into it.",
+  "received_at": "2026-10-06T08:30:00Z"
+ },
+ {
+  "message_id": "sample-004",
+  "sender": "sara@medgan.ai",
+  "sender_name": "Sara Nasser",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Marketing report moved",
+  "body": "Quick update on the Q3 marketing report: the deadline moved to 2026-10-27 and it is now blocked until legal data arrives. Please update the task.",
+  "received_at": "2026-10-07T08:30:00Z"
+ },
+ {
+  "message_id": "sample-005",
+  "sender": "rami@medgan.ai",
+  "sender_name": "Rami Khoury",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Homepage banner",
+  "body": "We still need the website homepage banner redesign done. Could you track the homepage banner redesign for Mohammed Zaloom?",
+  "received_at": "2026-10-07T08:30:00Z"
+ },
+ {
+  "message_id": "sample-006",
+  "sender": "partner@acme-supplies.com",
+  "sender_name": "Dana (Acme Supplies)",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Contract question",
+  "body": "Hello, can you confirm the contract termination date and send us the signed legal agreement and bank details today?",
+  "received_at": "2026-10-08T08:30:00Z"
+ },
+ {
+  "message_id": "sample-007",
+  "sender": "hana@medgan.ai",
+  "sender_name": "Hana Saleh",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Newsletter",
+  "body": "Please create a task for the October newsletter.",
+  "received_at": "2026-10-08T08:30:00Z"
+ },
+ {
+  "message_id": "sample-008",
+  "sender": "khaled@medgan.ai",
+  "sender_name": "Khaled Younis",
+  "to": [
+   "xpand@medgan.ai"
+  ],
+  "subject": "Can you confirm the report was sent?",
+  "body": "Hi, can you confirm whether the Q3 report was sent to the client yesterday?",
+  "received_at": "2026-10-09T08:30:00Z"
+ }
+]

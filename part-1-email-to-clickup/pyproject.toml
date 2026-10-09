@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "live: calls real services (ClickUp, Bedrock, Microsoft Graph); needs credentials",
+    "e2e: calls the deployed stack",
+]
+addopts = "-m 'not live and not e2e' -q"
