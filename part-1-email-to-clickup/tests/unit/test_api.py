@@ -126,3 +126,12 @@ def test_review_items_say_whether_they_can_be_approved_and_why_not(w):
     assert [m["name"] for m in cfg["members"]] == ["Mohammed Zaloom", "Ahmad Haddad", "Sara Nasser"] and "to do" in cfg["statuses"]
     call(w, "POST", "/inbox/review/{id}/edit", body={"task": {"assignee": "Sara Nasser"}}, path={"id": "p-9"})
     assert call(w, "GET", "/inbox/messages/{id}", path={"id": "p-9"})[1]["can_approve"] is False  # executed now: nothing left to approve
+
+
+def test_real_mailbox_ids_arrive_percent_encoded(world):
+    """API Gateway does not decode path parameters; Graph internet message ids look like <abc@mail.example>."""
+    real = "<VI1PR02MB101@mail.example.com>"
+    world.triager.script[real] = Triage(action=Action.HUMAN_REVIEW, confidence=0.3, missing_fields=["assignee"])
+    world.svc.process(make_email(real))
+    status, body = call(world, "GET", "/inbox/messages/{id}", path={"id": "%3CVI1PR02MB101%40mail.example.com%3E"})
+    assert status == 200 and body["proposal"]["action"] == "HUMAN_REVIEW"

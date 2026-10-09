@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import unquote
 from typing import Any, Callable, Optional
 
 from .adapters.base import AdapterError
@@ -57,7 +58,7 @@ def handler(event: dict, context: Any = None, service: Optional[InboxService] = 
         return _run_sync(svc, event)
     principal = principal_from(event)
     method, resource = event.get("httpMethod", ""), event.get("resource", "")
-    params = event.get("pathParameters") or {}
+    params = {k: unquote(v) for k, v in (event.get("pathParameters") or {}).items()}  # API Gateway leaves path parameters percent-encoded; Graph ids look like <x@y>
     try:
         body = _body(event)
         if principal is None:
