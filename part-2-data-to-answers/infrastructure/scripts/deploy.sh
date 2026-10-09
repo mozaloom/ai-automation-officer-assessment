@@ -5,7 +5,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 "$ROOT/infrastructure/scripts/package_agent.sh"
 "$ROOT/infrastructure/scripts/package_inbox.sh"
-(cd "$ROOT/infrastructure" && cdk deploy --require-approval never --outputs-file "$OUTPUTS")
+(cd "$ROOT/infrastructure" && cdk deploy --require-approval never -c inbox_outlook_mode="${INBOX_OUTLOOK_MODE:-sample}" --outputs-file "$OUTPUTS")
 
 aws s3 cp "$ROOT/data/pos_availability.csv" "s3://$(output DataBucketName)/pos_availability.csv" --only-show-errors
 
