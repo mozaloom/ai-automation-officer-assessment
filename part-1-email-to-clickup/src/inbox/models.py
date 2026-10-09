@@ -106,6 +106,15 @@ class Triage(BaseModel):
             return [str(k) for k in value]
         return value
 
+    @field_validator("rationale", mode="before")
+    @classmethod
+    def _clean_rationale(cls, value: Any) -> Any:
+        """The model often sends "{}" or "null" for "nothing to say": that is an empty note, not text to show a reviewer."""
+        if value is None or isinstance(value, (dict, list)):
+            return ""
+        text = str(value).strip()
+        return "" if text.lower() in ("{}", "[]", "null", "none", "n/a", "") else text
+
     @field_validator("sensitive", mode="before")
     @classmethod
     def _as_bool(cls, value: Any) -> Any:

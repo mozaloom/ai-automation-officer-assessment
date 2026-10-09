@@ -29,7 +29,7 @@ export interface InboxConfig {
   members: { id: string; name: string; email: string }[]; statuses: string[];
   policy: { auto_send_replies: boolean; min_confidence: number; duplicate_high: number; duplicate_low: number; default_priority: string | null; default_status: string | null; required_for_create: string[] };
 }
-export interface EditChanges { task?: Partial<Record<"title" | "description" | "assignee" | "priority" | "due_date" | "status", string | null>>; reply_body?: string; target_task_id?: string }
+export interface EditChanges { action?: "CREATE_TASK" | "UPDATE_TASK" | "REPLY" | "IGNORE"; task?: Partial<Record<"title" | "description" | "assignee" | "priority" | "due_date" | "status", string | null>>; reply_body?: string; target_task_id?: string }
 
 export const fetchInboxConfig = () => apiFetch<InboxConfig>("/inbox/config");
 export const fetchMessages = () => apiFetch<MessageList>("/inbox/messages");

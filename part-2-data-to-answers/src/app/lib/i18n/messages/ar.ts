@@ -174,6 +174,8 @@ export const ar: Messages = {
       empty: "لا يوجد ما ينتظر المراجعة.", approve: "موافقة", edit: "تعديل", reject: "رفض", approving: "جارٍ التنفيذ…",
       cannotApprove: "لا يمكن الموافقة بعد:", rejectTitle: "رفض هذا الاقتراح", rejectReason: "السبب (اختياري)", confirmReject: "رفض", cancel: "إلغاء",
       editTitle: "تعديل وموافقة", save: "حفظ وموافقة", replyText: "نص الرد", assigneeHelp: "يمكن اختيار أعضاء ClickUp الفعليين فقط.",
+      decide: "قرار", decideTitle: "قرّر ما يحدث لهذه الرسالة", whatToDo: "ماذا يجب أن يحدث؟", chooseAction: "اختر…",
+      choice: { CREATE_TASK: "إنشاء مهمة", REPLY: "الرد على المرسل", IGNORE: "تجاهل (بدون إجراء)" }, saveDecision: "حفظ وتنفيذ", dismissNote: "لن يُنشأ أو يُرسل أي شيء.",
       pickAssignee: "اختر عضوًا…", noChange: "إبقاء كما اقتُرح", approved: "تمت الموافقة والتنفيذ.", rejected: "تم الرفض. لم يُنفَّذ شيء.",
     },
     activity: {

@@ -18,7 +18,10 @@ export default function EditDialog({ item, config, open, onClose, onDone }: { it
   const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   const triage = item.proposal?.triage;
-  const isReply = item.proposal?.action === "REPLY";
+  const undecided = item.proposal?.action === "HUMAN_REVIEW"; // the agent could not decide: the reviewer chooses what happens
+  const [choice, setChoice] = useState<"" | "CREATE_TASK" | "REPLY" | "IGNORE">("");
+  const isReply = undecided ? choice === "REPLY" : item.proposal?.action === "REPLY";
+  const isDismiss = undecided && choice === "IGNORE";
   const [task, setTask] = useState({ title: triage?.task?.title ?? "", description: triage?.task?.description ?? "", assignee: item.proposal?.resolved?.assignee_label ?? "", priority: triage?.task?.priority ?? "", due_date: triage?.task?.due_date ?? "", status: triage?.task?.status ?? "" });
   const [reply, setReply] = useState(triage?.reply?.body ?? "");
   const mutation = useMutation({ mutationFn: (changes: EditChanges) => editItem(item.message_id, changes), onSuccess: onDone });
@@ -33,15 +36,24 @@ export default function EditDialog({ item, config, open, onClose, onDone }: { it
   const problems = mutation.error instanceof ApiError && Array.isArray((mutation.error.payload as { error?: { problems?: string[] } } | undefined)?.error?.problems) ? (mutation.error.payload as { error: { problems: string[] } }).error.problems : [];
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate(isReply ? { reply_body: reply } : { task: { title: task.title || null, description: task.description || null, assignee: task.assignee || null, priority: task.priority || null, due_date: task.due_date || null, status: task.status || null } });
+    if (undecided && !choice) return;
+    const action = undecided ? { action: choice as "CREATE_TASK" | "REPLY" | "IGNORE" } : {};
+    mutation.mutate(isDismiss ? action : isReply ? { ...action, reply_body: reply } : { ...action, task: { title: task.title || null, description: task.description || null, assignee: task.assignee || null, priority: task.priority || null, due_date: task.due_date || null, status: task.status || null } });
   };
   const f = t.inbox.detail.field;
   return (
-    <dialog ref={ref} aria-label={t.inbox.review.editTitle} onClose={onClose} className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-xl border border-line p-0 text-text-dark backdrop:bg-black/40">
+    <dialog ref={ref} aria-label={undecided ? t.inbox.review.decideTitle : t.inbox.review.editTitle} onClose={onClose} className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-xl border border-line p-0 text-text-dark backdrop:bg-black/40">
       <form onSubmit={submit} className="space-y-4 p-5">
-        <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{t.inbox.review.editTitle}</h2>
+        <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{undecided ? t.inbox.review.decideTitle : t.inbox.review.editTitle}</h2>
           <button type="button" onClick={onClose} aria-label={t.common.close} className="rounded-md p-1.5 hover:bg-wash"><X className="h-4 w-4" aria-hidden="true" /></button></div>
-        {isReply ? (
+        {undecided && (
+          <label className="flex flex-col gap-1.5 text-sm font-medium">{t.inbox.review.whatToDo}
+            <select value={choice} onChange={(e) => setChoice(e.target.value as typeof choice)} className={field} required>
+              <option value="">{t.inbox.review.chooseAction}</option>
+              {(["CREATE_TASK", "REPLY", "IGNORE"] as const).map((c) => <option key={c} value={c}>{t.inbox.review.choice[c]}</option>)}
+            </select></label>
+        )}
+        {isDismiss ? <p className="rounded-md bg-wash px-3 py-2 text-sm text-text-gray">{t.inbox.review.dismissNote}</p> : undecided && !choice ? null : isReply ? (
           <label className="flex flex-col gap-1.5 text-sm font-medium">{t.inbox.review.replyText}<textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={7} maxLength={6000} className={`${field} h-auto py-2 font-normal`} dir="auto" /></label>
         ) : (
           <>
@@ -64,7 +76,7 @@ export default function EditDialog({ item, config, open, onClose, onDone }: { it
             <p>{describeError(mutation.error, t)}</p>{problems.length > 0 && <ul className="mt-1 list-disc ps-5 text-xs">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
           </div>
         )}
-        <div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={onClose}>{t.inbox.review.cancel}</Button><Button type="submit" size="sm" loading={mutation.isPending}>{t.inbox.review.save}</Button></div>
+        <div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={onClose}>{t.inbox.review.cancel}</Button><Button type="submit" size="sm" loading={mutation.isPending} disabled={undecided && !choice}>{undecided ? t.inbox.review.saveDecision : t.inbox.review.save}</Button></div>
       </form>
     </dialog>
   );

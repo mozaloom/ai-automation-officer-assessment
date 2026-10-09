@@ -19,10 +19,10 @@ export default function ProposalView({ m }: { m: MessageDetail }) {
     <div className="space-y-5" data-testid="proposal-view">
       <section aria-label={d.email}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h3 className="min-w-0 flex-1 text-base font-semibold text-text-dark [overflow-wrap:anywhere]">{m.subject || "(no subject)"}</h3>
+          <h3 dir="auto" className="min-w-0 flex-1 text-base font-semibold text-text-dark [overflow-wrap:anywhere]">{m.subject || "(no subject)"}</h3>
           <StatusChip status={m.status} />
         </div>
-        <p className="mt-0.5 text-xs text-text-gray" dir="ltr">{m.sender_name ? `${m.sender_name} <${m.sender}>` : m.sender} · {dateTime(m.received_at)}</p>
+        <p className="mt-0.5 text-xs text-text-gray"><bdi dir="ltr">{m.sender_name ? `${m.sender_name} <${m.sender}>` : m.sender}</bdi> · {dateTime(m.received_at)}</p>
         <p className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-wash p-3 text-sm text-text-dark [overflow-wrap:anywhere]" dir="auto">{m.body_excerpt}</p>
       </section>
 
@@ -34,14 +34,14 @@ export default function ProposalView({ m }: { m: MessageDetail }) {
             <span className="text-xs text-text-gray">{t.inbox.route[p.route]} · {d.confidence}: {Math.round(p.triage.confidence * 100)}%</span>
           </div>
           {p.reasons.length > 0 && (
-            <ul className="mt-2 list-disc space-y-0.5 ps-5 text-sm text-text-dark" aria-label={d.why}>{p.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
+            <ul className="mt-2 list-disc space-y-0.5 ps-5 text-sm text-text-dark" aria-label={d.why}>{p.reasons.map((x) => <li key={x} dir="auto">{x}</li>)}</ul>
           )}
-          {p.triage.rationale && <p className="mt-1 text-xs text-text-gray">{d.rationale}: {p.triage.rationale}</p>}
+          {p.triage.rationale && <p dir="auto" className="mt-1 text-xs text-text-gray">{d.rationale}: {p.triage.rationale}</p>}
 
           {(p.action === "CREATE_TASK" || p.action === "UPDATE_TASK") && (
             <dl className="mt-3 divide-y divide-line border-y border-line" aria-label={d.fields}>
-              <div className={row}><dt className="text-text-gray">{d.field.title}</dt><dd className="text-text-dark [overflow-wrap:anywhere]">{draft?.title || notStated}</dd></div>
-              <div className={row}><dt className="text-text-gray">{d.field.description}</dt><dd className="whitespace-pre-wrap text-text-dark [overflow-wrap:anywhere]">{draft?.description || notStated}</dd></div>
+              <div className={row}><dt className="text-text-gray">{d.field.title}</dt><dd dir="auto" className="text-text-dark [overflow-wrap:anywhere]">{draft?.title || notStated}</dd></div>
+              <div className={row}><dt className="text-text-gray">{d.field.description}</dt><dd dir="auto" className="whitespace-pre-wrap text-text-dark [overflow-wrap:anywhere]">{draft?.description || notStated}</dd></div>
               <div className={row}><dt className="text-text-gray">{d.field.assignee}</dt>
                 <dd className="text-text-dark">{r?.assignee_label ? <>{r.assignee_label}</> : draft?.assignee ? <span className="text-red-700">{draft.assignee}: {d.assigneeUnknown}</span> : notStated}</dd></div>
               <div className={row}><dt className="text-text-gray">{d.field.priority}</dt>

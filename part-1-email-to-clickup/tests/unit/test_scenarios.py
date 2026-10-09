@@ -318,3 +318,54 @@ def test_stored_email_content_is_minimal(world):
     item = world.store.get("m-15")
     assert len(item["body_excerpt"]) == 1500 and "body" not in item
     assert all("x" * 20 not in str(a) for a in world.store.list_audit("m-15"))  # audit never holds email text
+
+
+# a reviewer can decide an item the agent could not -----------------------------------------------------------------
+def human_review(world, mid="m-20", **kw):
+    run(world, make_email(mid, **kw), Triage(action=Action.HUMAN_REVIEW, confidence=0.4, rationale="{}", missing_fields=["scope"]))
+    return mid
+
+
+def test_empty_rationale_text_from_the_model_is_not_shown(world):
+    mid = human_review(world)
+    p = world.store.get(mid)["proposal"]
+    assert p["triage"]["rationale"] == "" and p["reasons"] == ["missing: scope"] and "{}" not in str(p["reasons"])
+
+
+def test_a_human_review_item_cannot_be_approved_but_can_be_decided_by_the_reviewer(world):
+    mid = human_review(world)
+    with pytest.raises(Invalid):
+        world.svc.approve(mid, REVIEWER)
+    with pytest.raises(Invalid) as err:  # no choice made
+        world.svc.edit(mid, REVIEWER, {})
+    assert "choose what to do" in err.value.problems[0]
+    with pytest.raises(Invalid) as err:  # chose a task but gave nothing to build it from
+        world.svc.edit(mid, REVIEWER, {"action": "CREATE_TASK"})
+    assert "missing" in err.value.problems[0] and world.tasks.created == []
+    out = world.svc.edit(mid, REVIEWER, {"action": "CREATE_TASK", "task": {"title": "Handle the client issue", "assignee": "Sara Nasser"}})
+    assert out["status"] == Status.EXECUTED.value and world.tasks.created[0]["assignees"] == ["Sara Nasser"]
+    assert world.store.get(mid)["proposal"]["action"] == "CREATE_TASK" and world.store.get(mid)["original_proposal"]["action"] == "HUMAN_REVIEW"
+
+
+def test_the_reviewer_can_answer_or_dismiss_an_undecided_email(world):
+    a, b = human_review(world, "m-21"), human_review(world, "m-22", sender="partner@acme.com")
+    world.svc.edit(a, REVIEWER, {"action": "REPLY", "reply_body": "Yes, it was sent yesterday."})
+    assert world.mail.sent == [{"message_id": "m-21", "body": "Yes, it was sent yesterday."}]
+    out = world.svc.edit(b, REVIEWER, {"action": "IGNORE"})
+    assert out["status"] == Status.IGNORED.value and len(world.mail.sent) == 1 and world.tasks.created == []
+    with pytest.raises(Conflict):
+        world.svc.edit(b, REVIEWER, {"action": "IGNORE"})
+
+
+def test_an_override_action_is_ignored_for_items_that_already_have_one(world):
+    run(world, make_email("m-23"), create_triage(title="Redesign homepage layout", description="Layout", assignee="Sara Nasser"))
+    with pytest.raises(Invalid):
+        world.svc.edit("m-23", REVIEWER, {"action": "IGNORE", "task": {"assignee": "Nobody"}})  # cannot turn a create into something else; invalid fields still block
+    assert status(world, "m-23") == Status.PENDING_REVIEW.value
+
+
+def test_unauthorized_users_cannot_decide(world):
+    mid = human_review(world, "m-24")
+    with pytest.raises(Forbidden):
+        world.svc.edit(mid, OUTSIDER, {"action": "IGNORE"})
+    assert status(world, mid) == Status.PENDING_REVIEW.value

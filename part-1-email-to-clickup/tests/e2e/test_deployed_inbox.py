@@ -190,6 +190,15 @@ def test_deployed_pipeline(cfg, reviewer, outsider, clickup, table):
     assert status == 200 and body["status"] == "REJECTED" and len(clickup.a.list_tasks()) == before
     assert call(cfg, "POST", f"/inbox/review/{cid}/approve", reviewer, {})[0] == 409
 
+    # the reviewer decides an item the agent could not (HUMAN_REVIEW): a reply is only sent because the reviewer chose and approved it
+    status, _, body = call(cfg, "POST", f"/inbox/review/{contract['message_id']}/approve", reviewer, {})
+    assert status == 422  # an undecided item cannot simply be "approved"
+    assert call(cfg, "POST", f"/inbox/review/{contract['message_id']}/edit", outsider, {"action": "REPLY", "reply_body": "x"})[0] == 403
+    status, _, body = call(cfg, "POST", f"/inbox/review/{contract['message_id']}/edit", reviewer, {"action": "REPLY", "reply_body": "Thank you. We will confirm the details by email."})
+    assert status == 200 and body["status"] == "EXECUTED" and body.get("sent") is True
+    status, _, view = call(cfg, "GET", f"/inbox/messages/{contract['message_id']}", reviewer)
+    assert view["status"] == "EXECUTED" and view["proposal"]["action"] == "REPLY" and view["approved_by"] == cfg["email"]
+
     # audit trail exists and records the denied attempts
     _, _, activity = call(cfg, "GET", "/inbox/activity", reviewer)
     events = {e["event"] for e in activity["events"]}

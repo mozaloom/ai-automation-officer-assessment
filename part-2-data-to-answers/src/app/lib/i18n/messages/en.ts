@@ -170,6 +170,8 @@ export const en = {
       empty: "Nothing is waiting for review.", approve: "Approve", edit: "Edit", reject: "Reject", approving: "Running…",
       cannotApprove: "Cannot approve yet:", rejectTitle: "Reject this proposal", rejectReason: "Reason (optional)", confirmReject: "Reject", cancel: "Cancel",
       editTitle: "Edit and approve", save: "Save and approve", replyText: "Reply text", assigneeHelp: "Only real ClickUp members can be chosen.",
+      decide: "Decide", decideTitle: "Decide what happens to this email", whatToDo: "What should happen?", chooseAction: "Choose…",
+      choice: { CREATE_TASK: "Create a task", REPLY: "Reply to the sender", IGNORE: "Dismiss (no action)" }, saveDecision: "Save and run", dismissNote: "Nothing will be created or sent.",
       pickAssignee: "Choose a member…", noChange: "Keep as proposed", approved: "Approved and executed.", rejected: "Rejected. Nothing was executed.",
     },
     activity: {

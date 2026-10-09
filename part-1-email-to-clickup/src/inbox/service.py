@@ -262,22 +262,37 @@ class InboxService:
         principal = self._require_reviewer(principal)
         item, proposal = self._pending(message_id)
         triage = proposal.triage.model_dump()
+        action = proposal.action
+        if action == Action.HUMAN_REVIEW:  # the agent could not decide: the reviewer does, by choosing what should happen
+            chosen = changes.get("action")
+            if chosen not in (Action.CREATE_TASK.value, Action.UPDATE_TASK.value, Action.REPLY.value, Action.IGNORE.value):
+                raise Invalid(["choose what to do: create a task, update a task, reply, or dismiss"])
+            action = Action(chosen)
+            triage["action"] = action.value
+            triage["sensitive"] = False if action == Action.IGNORE else triage.get("sensitive", False)
+            if action == Action.IGNORE:
+                if not self.store.transition(message_id, [Status.PENDING_REVIEW], Status.IGNORED, {"approved_by": self._who(principal), "approved_at": iso(self.clock())}):
+                    raise Conflict("this email was already handled")
+                self._audit(message_id, "ignored", principal, action=Action.IGNORE.value, outcome="dismissed", detail="dismissed by a reviewer")
+                return {"status": Status.IGNORED.value}
         try:
-            if proposal.action in (Action.CREATE_TASK, Action.UPDATE_TASK):
+            if action in (Action.CREATE_TASK, Action.UPDATE_TASK):
                 task = {**(triage.get("task") or {}), **{k: v for k, v in (changes.get("task") or {}).items() if k in ("title", "description", "assignee", "priority", "due_date", "status")}}
                 triage["task"] = task
                 if changes.get("target_task_id"):
                     triage["target_task_id"] = str(changes["target_task_id"])
-            if proposal.action == Action.REPLY and changes.get("reply_body") is not None:
+            if action == Action.REPLY and changes.get("reply_body") is not None:
                 triage["reply"] = {**(triage.get("reply") or {}), "body": changes["reply_body"]}
             edited = Triage.model_validate(triage)
+            if edited.action == Action.HUMAN_REVIEW and action != Action.HUMAN_REVIEW:  # the chosen action lacked what it needs
+                raise Invalid([f"missing {', '.join(edited.missing_fields)}"])
         except ValidationError as err:
             raise Invalid([f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in err.errors()[:5]]) from None
         members, statuses, tasks = self.tasks.list_members(), self.tasks.list_statuses(), self.tasks.list_tasks()
         received = datetime.fromisoformat(item["received_at"].replace("Z", "+00:00")).date()
-        resolved = resolve_task(edited.task, members, statuses, received, self.settings.policy, creating=proposal.action == Action.CREATE_TASK) if edited.task else None
+        resolved = resolve_task(edited.task, members, statuses, received, self.settings.policy, creating=edited.action == Action.CREATE_TASK) if edited.task else None
         query = (edited.task.title if edited.task and edited.task.title else item.get("subject", ""))
-        new = Proposal(action=proposal.action, triage=edited, resolved=resolved, matches=find_matches(query, message_id, tasks), route="review", reasons=proposal.reasons, version=proposal.version + 1, edited_by=self._who(principal))
+        new = Proposal(action=edited.action, triage=edited, resolved=resolved, matches=find_matches(query, message_id, tasks), route="review", reasons=proposal.reasons, version=proposal.version + 1, edited_by=self._who(principal))
         problems = self.executable_problems(new)
         if problems:
             raise Invalid(problems)

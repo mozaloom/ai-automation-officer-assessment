@@ -24,19 +24,26 @@ function ReviewCard({ item, config }: { item: MessageDetail; config?: Parameters
   const done = (message: string) => { setNotice(message); setEditing(false); setRejecting(false); void qc.invalidateQueries({ queryKey: ["inbox"] }); };
   const approve = useMutation({ mutationFn: () => approveItem(item.message_id), onSuccess: () => done(t.inbox.review.approved) });
   const reject = useMutation({ mutationFn: () => rejectItem(item.message_id, reason), onSuccess: () => done(t.inbox.review.rejected) });
+  const undecided = item.proposal?.action === "HUMAN_REVIEW";
   const error = approve.error ?? reject.error;
   const problems = error instanceof ApiError && Array.isArray((error.payload as { error?: { problems?: string[] } } | undefined)?.error?.problems) ? (error.payload as { error: { problems: string[] } }).error.problems : [];
   return (
     <article className="rounded-xl border border-line p-4 sm:p-5" aria-label={item.subject} data-testid="review-card">
       <ProposalView m={item} />
-      {!item.can_approve && item.problems.length > 0 && (
+      {!undecided && !item.can_approve && item.problems.length > 0 && (
         <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"><span className="font-medium">{t.inbox.review.cannotApprove}</span> {item.problems.join("; ")}</p>
       )}
       {notice && <p role="status" className="mt-4 text-sm font-medium text-emerald-700">{notice}</p>}
       {error && <div role="alert" className="mt-4 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-800"><p>{describeError(error, t)}</p>{problems.length > 0 && <ul className="mt-1 list-disc ps-5 text-xs">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}</div>}
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-        <Button size="sm" onClick={() => approve.mutate()} loading={approve.isPending} disabled={!item.can_approve || reject.isPending}><Check className="h-4 w-4" aria-hidden="true" />{approve.isPending ? t.inbox.review.approving : t.inbox.review.approve}</Button>
-        <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={approve.isPending}><Pencil className="h-3.5 w-3.5" aria-hidden="true" />{t.inbox.review.edit}</Button>
+        {undecided ? (
+          <Button size="sm" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" aria-hidden="true" />{t.inbox.review.decide}</Button>
+        ) : (
+          <>
+            <Button size="sm" onClick={() => approve.mutate()} loading={approve.isPending} disabled={!item.can_approve || reject.isPending}><Check className="h-4 w-4" aria-hidden="true" />{approve.isPending ? t.inbox.review.approving : t.inbox.review.approve}</Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={approve.isPending}><Pencil className="h-3.5 w-3.5" aria-hidden="true" />{t.inbox.review.edit}</Button>
+          </>
+        )}
         <Button size="sm" variant="outline" onClick={() => setRejecting((v) => !v)} disabled={approve.isPending}><X className="h-3.5 w-3.5" aria-hidden="true" />{t.inbox.review.reject}</Button>
       </div>
       {rejecting && (

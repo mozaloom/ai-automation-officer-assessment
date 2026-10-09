@@ -165,6 +165,25 @@ describe("ReviewView", () => {
     expect(await screen.findByText("assignee 'Zed' is not a member of the workspace")).toBeInTheDocument();
   });
 
+  it("an item the agent could not decide offers Decide (not a dead Approve) and sends the reviewer's choice", async () => {
+    const undecided = reviewItem({ can_approve: false, problems: ["HUMAN_REVIEW has nothing to execute"] });
+    undecided.proposal = { ...undecided.proposal!, action: "HUMAN_REVIEW", resolved: null, triage: { ...undecided.proposal!.triage, action: "HUMAN_REVIEW", task: null }, reasons: ["missing: scope"] };
+    api.fetchReview.mockResolvedValue({ items: [undecided] });
+    api.editItem.mockResolvedValue({ status: "IGNORED" });
+    wrap(<ReviewView />);
+    const user = userEvent.setup();
+    const card = await screen.findByTestId("review-card");
+    expect(within(card).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(card).not.toHaveTextContent("Cannot approve yet");
+    await user.click(within(card).getByRole("button", { name: "Decide" }));
+    const dialog = screen.getByRole("dialog", { name: "Decide what happens to this email", hidden: true });
+    expect(within(dialog).getByRole("button", { name: "Save and run" })).toBeDisabled(); // nothing chosen yet
+    await user.selectOptions(within(dialog).getByLabelText("What should happen?"), "IGNORE");
+    expect(within(dialog).getByText("Nothing will be created or sent.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Save and run" }));
+    await waitFor(() => expect(api.editItem).toHaveBeenCalledWith("m1", { action: "IGNORE" }));
+  });
+
   it("an unauthorised or already-handled action is explained", async () => {
     api.fetchReview.mockResolvedValue({ items: [reviewItem()] });
     api.approveItem.mockRejectedValueOnce(new ApiError(403, "x", undefined, "forbidden")).mockRejectedValueOnce(new ApiError(409, "x", undefined, "conflict"));
