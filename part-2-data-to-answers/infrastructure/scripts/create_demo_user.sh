@@ -13,6 +13,8 @@ if ! aws cognito-idp admin-get-user --user-pool-id "$POOL_ID" --username "$EMAIL
     --message-action SUPPRESS >/dev/null
 fi
 aws cognito-idp admin-set-user-password --user-pool-id "$POOL_ID" --username "$EMAIL" --password "$PASSWORD" --permanent
+# Part 1 (Inbox Automation): the demo user may sync, approve, edit and reject. Skipped quietly if the group does not exist yet.
+aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL_ID" --username "$EMAIL" --group-name inbox-reviewers 2>/dev/null || true
 umask 077
 printf 'email=%s\npassword=%s\n' "$EMAIL" "$PASSWORD" > "$ROOT/.demo-credentials"
 echo "demo user ready: $EMAIL (password saved to .demo-credentials)"

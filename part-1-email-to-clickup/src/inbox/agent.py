@@ -106,8 +106,14 @@ def local_tools(settings: Settings) -> list:
 class AgentRuntimeTriager:
     """Calls the deployed Inbox Reviewer runtime (IAM/SigV4) and validates what comes back."""
 
-    def __init__(self, settings: Settings, client: Any = None):
-        self.settings, self._client = settings, client
+    ATTEMPTS = 3
+    BACKOFF = 3.0
+    TRANSIENT = {"RuntimeClientError", "ThrottlingException", "ServiceUnavailableException", "InternalServerException", "ServiceQuotaExceededException", "RuntimeStartupTimeout"}
+
+    def __init__(self, settings: Settings, client: Any = None, sleep: Any = None):
+        import time
+
+        self.settings, self._client, self._sleep = settings, client, sleep or time.sleep
 
     def triage(self, email: Email, context: dict) -> Triage:
         import uuid
@@ -120,14 +126,26 @@ class AgentRuntimeTriager:
             from botocore.config import Config
 
             self._client = boto3.client("bedrock-agentcore", region_name=self.settings.region, config=Config(read_timeout=110, retries={"max_attempts": 2}))
-        try:
-            response = self._client.invoke_agent_runtime(
-                agentRuntimeArn=self.settings.agent_runtime_arn, runtimeSessionId=f"inbox-{uuid.uuid4()}",  # one fresh session per email: no cross-email memory
-                payload=json.dumps({"email": email.model_dump(mode="json"), "context": context}).encode(),
-            )
-            raw = response["response"].read()
-        except (ClientError, BotoCoreError, TimeoutError) as err:
-            raise TriageUnavailable(f"the agent runtime is not available ({type(err).__name__})") from None
+        payload = json.dumps({"email": email.model_dump(mode="json"), "context": context}).encode()
+        raw = b""
+        for attempt in range(self.ATTEMPTS):
+            try:
+                response = self._client.invoke_agent_runtime(
+                    agentRuntimeArn=self.settings.agent_runtime_arn, runtimeSessionId=f"inbox-{uuid.uuid4()}", payload=payload)  # a fresh session per try: no cross-email memory
+                raw = response["response"].read()
+                break
+            except ClientError as err:
+                code = err.response.get("Error", {}).get("Code", "")
+                # Triage only PROPOSES (it changes nothing), so a bounded retry of a transient runtime error is safe, unlike a task create.
+                if code in self.TRANSIENT and attempt + 1 < self.ATTEMPTS:
+                    self._sleep(self.BACKOFF * (attempt + 1))
+                    continue
+                raise TriageUnavailable(f"the agent runtime is not available ({code or type(err).__name__})") from None
+            except (BotoCoreError, TimeoutError) as err:
+                if attempt + 1 < self.ATTEMPTS:
+                    self._sleep(self.BACKOFF * (attempt + 1))
+                    continue
+                raise TriageUnavailable(f"the agent runtime is not available ({type(err).__name__})") from None
         try:
             data = json.loads(raw)
         except ValueError:

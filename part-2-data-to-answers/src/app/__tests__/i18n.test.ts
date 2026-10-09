@@ -29,7 +29,7 @@ describe("dictionaries", () => {
   it("Arabic copy uses Western digits and no Latin leftovers except the brand and the email example", () => {
     const text = strings(MESSAGES.ar).join(" ");
     expect(text).not.toMatch(/[\u0660-\u0669]/);
-    const latin = (text.match(/[A-Za-z]+/g) ?? []).filter((w) => !["XPAND", "name", "xpandpros", "com", "English"].includes(w));
+    const latin = (text.match(/[A-Za-z]+/g) ?? []).filter((w) => !["XPAND", "name", "xpandpros", "com", "English", "ClickUp"].includes(w));
     expect(latin).toEqual([]);
   });
   it("Arabic states and the glossary agree, so tables and answers use the same words", () => {

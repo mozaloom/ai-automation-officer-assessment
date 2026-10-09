@@ -156,7 +156,7 @@ def _run_sync(svc: InboxService, event: dict) -> dict:
     started = (svc.store.get_meta("sync") or {}).get("started_at", iso(utcnow()))
     try:
         emails = svc.mail.list_recent_emails(svc.settings.sync_limit)
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             outcomes = list(pool.map(svc.process, emails))
         summary = {"fetched": len(emails), "new": sum(o["outcome"] == "processed" for o in outcomes), "duplicates": sum(o["outcome"] == "duplicate" for o in outcomes), "failed": sum(o["outcome"] == "failed" for o in outcomes)}
         svc.store.put_meta("sync", {"state": "done", "started_at": started, "finished_at": iso(utcnow()), **summary, "requested_by": principal.email})
