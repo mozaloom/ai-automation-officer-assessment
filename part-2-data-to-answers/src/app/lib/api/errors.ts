@@ -12,6 +12,8 @@ export function describeError(err: unknown, t: Messages): string {
       case "invalid_request": return t.errors.rejected;
     }
     if (err.status === 401) return t.errors.sessionExpired;
+    if (err.status === 403) return t.errors.forbidden;
+    if (err.status === 409) return t.errors.conflict;
     if (err.status === 429) return t.errors.busy;
     if (err.status >= 500) return t.errors.upstream;
     if (err.status >= 400) return t.errors.rejected;

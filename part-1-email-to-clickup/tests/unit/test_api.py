@@ -51,6 +51,9 @@ def test_unauthenticated_and_unauthorized(w):
         status, out = call(w, method, resource, groups="", body=body, path={"id": "p-1"})
         assert status == 403 and out["error"]["code"] == "forbidden"
     assert call(w, "POST", "/inbox/sync", groups="")[0] == 403 and w.async_calls == []
+    for route, path in (("/inbox/messages", None), ("/inbox/messages/{id}", {"id": "p-1"}), ("/inbox/review", None), ("/inbox/activity", None), ("/inbox/config", None)):
+        status, out = call(w, "GET", route, groups="some-other-group", path=path)
+        assert status == 403 and "body_excerpt" not in json.dumps(out), route  # reads need the reviewer group too
     assert w.store.get("p-1")["status"] == "PENDING_REVIEW"
 
 

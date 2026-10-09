@@ -62,6 +62,7 @@ def handler(event: dict, context: Any = None, service: Optional[InboxService] = 
         body = _body(event)
         if principal is None:
             return _error(401, "unauthenticated", "Sign in again.")
+        svc._require_reviewer(principal)  # reads expose email text and the audit trail, so they need the reviewer group too
         if resource == "/inbox/config" and method == "GET":
             return _response(200, _config(svc))
         if resource == "/inbox/messages" and method == "GET":

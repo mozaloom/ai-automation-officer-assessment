@@ -54,15 +54,14 @@ class InboxAutomation(Construct):
         tools_fn = lambda_.Function(
             self, "ToolsFn", function_name=f"{PREFIX}-tools", runtime=lambda_.Runtime.PYTHON_3_13, architecture=lambda_.Architecture.ARM_64, handler="inbox.tools.handler",
             code=lambda_.Code.from_asset(str(lambda_zip)), timeout=Duration.seconds(30), memory_size=256,
-            environment={"CLICKUP_MODE": clickup_mode, "OUTLOOK_MODE": outlook_mode, "CLICKUP_SECRET_ID": CLICKUP_SECRET, "GRAPH_SECRET_ID": GRAPH_SECRET},
+            environment={"CLICKUP_MODE": clickup_mode, "CLICKUP_SECRET_ID": CLICKUP_SECRET},  # ClickUp only: the tools Lambda has no mailbox access
             log_group=logs.LogGroup(self, "ToolsLogs", retention=logs.RetentionDays.ONE_MONTH, removal_policy=RemovalPolicy.DESTROY),
         )
         tools_fn.add_to_role_policy(iam.PolicyStatement(sid="ReadClickUpSecret", actions=["secretsmanager:GetSecretValue"], resources=[secret_arn(CLICKUP_SECRET)]))
-        tools_fn.add_to_role_policy(iam.PolicyStatement(sid="GraphSecret", actions=["secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"], resources=[secret_arn(GRAPH_SECRET)]))  # token rotation
 
-        self.gateway = agentcore.Gateway(self, "Gateway", gateway_name=f"{PREFIX}-tools", description="Read-only ClickUp and Outlook tools for the Inbox Reviewer agent", authorizer_configuration=agentcore.GatewayAuthorizer.using_aws_iam())
+        self.gateway = agentcore.Gateway(self, "Gateway", gateway_name=f"{PREFIX}-tools", description="Read-only ClickUp tools for the Inbox Reviewer agent", authorizer_configuration=agentcore.GatewayAuthorizer.using_aws_iam())
         self.gateway.add_lambda_target(
-            "ToolsTarget", gateway_target_name="inbox-tools", lambda_function=tools_fn, description="Search and read tasks, read an email, create a reply draft. Cannot create tasks or send mail.",
+            "ToolsTarget", gateway_target_name="inbox-tools", lambda_function=tools_fn, description="Search and read ClickUp tasks. Cannot create or update anything, and has no mailbox access.",
             tool_schema=agentcore.ToolSchema.from_inline([
                 agentcore.ToolDefinition(
                     name=t["name"], description=t["description"],

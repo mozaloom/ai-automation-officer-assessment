@@ -43,7 +43,13 @@ def test_claim_is_exclusive(store):
     assert store.get("a")["subject"] == "s" and store.get("missing") is None
 
 
+def _real_dynamodb_only(store):
+    if isinstance(store, DynamoStore):
+        pytest.skip("moto is not atomic under threads; real DynamoDB conditional writes are verified by tests/e2e/test_dynamo_atomicity.py")
+
+
 def test_claim_is_exclusive_under_concurrency(store):
+    _real_dynamodb_only(store)
     wins = []
     threads = [threading.Thread(target=lambda: wins.append(store.claim("race", item()))) for _ in range(10)]
     [t.start() for t in threads]
@@ -60,6 +66,7 @@ def test_transition_is_conditional_on_the_current_state(store):
 
 
 def test_only_one_of_many_concurrent_transitions_wins(store):
+    _real_dynamodb_only(store)
     store.claim("a", item(status="PENDING_REVIEW"))
     wins = []
     threads = [threading.Thread(target=lambda: wins.append(store.transition("a", [Status.PENDING_REVIEW], Status.EXECUTING))) for _ in range(10)]

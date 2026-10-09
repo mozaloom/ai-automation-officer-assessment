@@ -1,7 +1,8 @@
 """The MCP tool surface the model may use, exposed through an AgentCore Gateway Lambda target.
 
-READ-ONLY by design: the model can search and read tasks, read an email and create a reply draft. It can NOT create or update tasks or send
-mail: those happen only in the backend, after policy and approval, so no prompt can talk its way into an external write.
+Minimal and READ-ONLY by design: the model can search and read ClickUp tasks, nothing else. It cannot read other emails (the one being
+triaged is already in its prompt), cannot write to the mailbox (the backend creates reply drafts), and cannot create or update tasks or send
+mail: those happen only in the backend, after policy and approval, so no prompt can talk its way into an external action.
 Event = tool arguments; the tool name arrives in context.client_context.custom['bedrockAgentCoreToolName'] as '<target>___<tool>'.
 """
 
@@ -14,7 +15,7 @@ from typing import Any, Callable
 from .adapters.base import AdapterError
 from .config import Settings
 from .resolve import similarity
-from .wiring import build_mail, build_tasks
+from .wiring import build_tasks
 
 log = logging.getLogger("inbox.tools")
 
@@ -23,10 +24,6 @@ TOOL_SCHEMAS = [
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Words from the task title to look for"}, "limit": {"type": "integer", "description": "Maximum results (1 to 10)"}}, "required": ["query"]}},
     {"name": "clickup_get_task", "description": "Read one ClickUp task by id: name, status, assignees, priority, due date, short description.",
      "inputSchema": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]}},
-    {"name": "outlook_get_email", "description": "Read one email from the mailbox by message id (sender, subject, received time, body text).",
-     "inputSchema": {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}},
-    {"name": "outlook_draft_reply", "description": "Create a reply DRAFT in the mailbox. Never sends. A person approves and sends.",
-     "inputSchema": {"type": "object", "properties": {"message_id": {"type": "string"}, "body": {"type": "string"}}, "required": ["message_id", "body"]}},
 ]
 
 
@@ -36,22 +33,16 @@ def _brief(task: dict) -> dict:
 
 
 def make_tools(settings: Settings) -> dict[str, Callable[[dict], Any]]:
-    tasks, mail = build_tasks(settings), build_mail(settings)
+    tasks = build_tasks(settings)
 
     def search(args: dict) -> dict:
         query, limit = str(args.get("query", "")).strip(), max(1, min(int(args.get("limit", 5) or 5), 10))
         scored = sorted(((similarity(query, t["name"]), t) for t in tasks.list_tasks()), key=lambda x: -x[0])
         return {"tasks": [{**_brief(t), "match": s} for s, t in scored if s > 0][:limit]}
 
-    def get_email(args: dict) -> dict:
-        e = mail.get_email(str(args["message_id"]))
-        return {"sender": e.sender, "subject": e.subject, "received_at": e.received_at.isoformat(), "body": e.body[:3000]}
-
     return {
         "clickup_search_tasks": search,
         "clickup_get_task": lambda a: _brief(tasks.get_task(str(a["task_id"]))),
-        "outlook_get_email": get_email,
-        "outlook_draft_reply": lambda a: mail.draft_reply(str(a["message_id"]), str(a["body"])[:6000]),
     }
 
 
