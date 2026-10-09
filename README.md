@@ -4,7 +4,7 @@ Take-home assignment with two independent scenarios. **Live demo of Part 2: http
 
 | Part | Scenario | What is here |
 |---|---|---|
-| 1 | [**From Inbox to Board**](part-1-email-to-clickup) | A working POC (**Inbox Automation**) that turns work-request emails into ClickUp tasks with an AI agent, with human review for exceptions: Strands agent on Bedrock AgentCore, read-only MCP gateway, DynamoDB idempotency, approve/edit/reject. ClickUp is verified live; the Outlook (Microsoft Graph) mailbox is **not yet connected**, so the deployed demo reads a clearly labelled sample mailbox |
+| 1 | [**From Inbox to Board**](part-1-email-to-clickup) | A working POC (**Inbox Automation**) that turns work-request emails into ClickUp tasks with an AI agent, with human review for exceptions: Strands agent on Bedrock AgentCore, read-only MCP gateway, DynamoDB idempotency, approve/edit/reject. ClickUp and the real Outlook mailbox (Microsoft Graph, with live change notifications) are verified end to end, including a real task created from an email and a real approved reply |
 | 2 | [**Answering from the Data**](part-2-data-to-answers) | A working, deployed app that lets marketing answer "where can I buy this?" in seconds: an authenticated bilingual (English/Arabic) dashboard and a streaming assistant over the POS data |
 
 ## At a glance
@@ -33,7 +33,7 @@ They share one deployment, not one purpose. One sign-in (Amazon Cognito), one Am
 
 ## Run the project
 
-See [part-2-data-to-answers/README.md](part-2-data-to-answers/README.md) for setup, configuration, the API, deployment and tests of Part 2, and [part-1-email-to-clickup/README.md](part-1-email-to-clickup/README.md) for Part 1 (policy, setup of ClickUp and Microsoft Graph, tests, blockers). In short: `make install && make test` runs the unit tests with no AWS access; `make deploy` builds and deploys everything with the CDK.
+See [part-2-data-to-answers/README.md](part-2-data-to-answers/README.md) for setup, configuration, the API, deployment and tests of Part 2, and [part-1-email-to-clickup/README.md](part-1-email-to-clickup/README.md) for Part 1 (policy, setup of ClickUp and Microsoft Graph, webhooks, tests, limitations). In short: `make install && make test` runs the unit tests with no AWS access; `make deploy` builds and deploys everything with the CDK.
 
 The live site needs a sign-in. Sign-up is disabled; the demo user is created by `infrastructure/scripts/create_demo_user.sh` and its credentials are shared with the reviewers directly rather than stored in the repository.
 

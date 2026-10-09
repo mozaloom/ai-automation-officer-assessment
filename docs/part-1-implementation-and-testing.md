@@ -7,7 +7,7 @@ Detail behind the Part 1 submission document ([261002_MohammedZaloom_XPAND_P1_v1
 | Design (submission document) | As built |
 |---|---|
 | Five actions: `CREATE_TASK`, `UPDATE_TASK`, `REPLY`, `IGNORE`, `HUMAN_REVIEW` | Same five actions, schema-validated; an action without its payload degrades to `HUMAN_REVIEW` |
-| Webhook to API Gateway, Lambda validates and fetches the email | Manual **Sync inbox** through API Gateway and Lambda (asynchronous worker). Graph change notifications and subscription renewal are not implemented |
+| Webhook to API Gateway, Lambda validates and fetches the email | Graph change notifications call a public API Gateway route (authenticated by clientState) that starts the asynchronous sync worker; an hourly EventBridge rule renews the subscription and runs a catch-up sync. Manual **Sync inbox** still works |
 | DynamoDB message-ID idempotency | Conditional writes, explicit state machine, lease takeover, plus a marker in the ClickUp task so a retry adopts a half-finished create |
 | Strands agent on AgentCore Runtime with Nova 2 Lite | Same, on a second IAM-authorized runtime |
 | AgentCore Gateway MCP with ClickUp and Outlook tools, agent executes create/update/reply | Gateway with **read-only** ClickUp tools. Writes run only in the backend after policy and approval (a security decision: the model cannot reach an external write) |
@@ -21,7 +21,7 @@ Detail behind the Part 1 submission document ([261002_MohammedZaloom_XPAND_P1_v1
 
 **Mocked only:** Microsoft Graph (fake HTTP unit tests), ClickUp and Graph outages, and any real email send.
 
-**Not done:** connecting the real mailbox (needs an Entra app registration and a sign-in as `xpand@medgan.ai`; the build machine's Azure CLI is signed in to a personal account), the Graph webhook, and ClickUp web-UI screenshots (the ClickUp UI needs an interactive sign-in; the app shows each created task with a link).
+**Not done:** ClickUp web-UI screenshots (the ClickUp UI needs an interactive sign-in; the app shows each created task with a link).
 
 ## Problems found while testing
 

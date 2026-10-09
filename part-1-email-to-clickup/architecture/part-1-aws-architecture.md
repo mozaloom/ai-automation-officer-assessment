@@ -2,7 +2,7 @@
 
 Diagram: `part-1-aws-architecture.drawio` (exports: `.drawio.png`, `.drawio.svg`, `.drawio.pdf`)
 
-Incoming work-request emails are read from the `xpand@medgan.ai` mailbox (Microsoft Graph, or the labelled sample mailbox until Graph is connected). A Strands agent on Amazon Bedrock AgentCore proposes one of five actions; a deterministic backend validates it, applies policy, and either executes it in ClickUp or queues it for a person to approve, edit or reject. It runs in the same AWS stack and application as Part 2.
+Incoming work-request emails are read from the `xpand@medgan.ai` mailbox (Microsoft Graph; a labelled sample mailbox exists for demos). Graph change notifications call a public API Gateway route that starts the sync, and an hourly EventBridge rule renews the subscription. A Strands agent on Amazon Bedrock AgentCore proposes one of five actions; a deterministic backend validates it, applies policy, and either executes it in ClickUp or queues it for a person to approve, edit or reject. It runs in the same AWS stack and application as Part 2.
 
 ## Flow
 

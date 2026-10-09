@@ -31,8 +31,25 @@ async function login(page: Page, l: "en" | "ar", next: string) {
 
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true });
 
+// The deployed stack reads either the sample mailbox or the real one. The scenarios below approve and reject items, so they run only against
+// the sample mailbox (E2E_INBOX_MODE=sample) and never act on real mail; the read-only real-mailbox check runs with E2E_INBOX_MODE=graph.
+const MODE = process.env.E2E_INBOX_MODE ?? "sample";
+
 for (const l of ["en", "ar"] as const) {
+  test.describe(`inbox automation, real mailbox, read-only (${l})`, () => {
+    test.skip(MODE !== "graph", "needs a stack deployed with the real mailbox (E2E_INBOX_MODE=graph)");
+    test("shows the real mailbox, live updates and no sample banner", async ({ page }) => {
+      await login(page, l, "inbox");
+      await expect(page.getByTestId("live-updates")).toBeVisible();
+      await expect(page.getByText("xpand@medgan.ai").first()).toBeVisible();
+      await expect(page.getByRole("note")).toHaveCount(0);
+      await expect(page.getByRole("list", { name: T[l].inbox })).toBeVisible();
+      await shot(page, `${l}-inbox-real-mailbox`);
+    });
+  });
+
   test.describe(`inbox automation (${l})`, () => {
+    test.skip(MODE !== "sample", "approves and rejects items: only against the sample mailbox");
     test("sync, list, proposal detail with real field values", async ({ page }) => {
       await login(page, l, "inbox");
       await expect(page.getByRole("link", { name: T[l].review })).toBeVisible();

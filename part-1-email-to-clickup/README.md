@@ -21,12 +21,16 @@ More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-d
 | Cognito reviewer-group authorization | Verified | deployed tests with a real non-reviewer Cognito user |
 | Inbox, Review queue and Activity UI (en/ar, phone) | Verified | 175 web unit tests, 8 Playwright tests on production |
 | **Microsoft Graph / Outlook** | **Verified for reading** | Device-code sign-in as `xpand@medgan.ai` done; the deployed app runs with `inbox_outlook_mode=graph`. Real **Sync inbox** runs: ClickUp notifications were classified `IGNORE`; a real "create a task" email was reviewed, edited and approved into a real ClickUp task; a real "please confirm" email produced a `REPLY` proposal that, once approved, was **sent from `xpand@medgan.ai` and received** in the sender's inbox |
-| Graph change notifications (webhook) and subscription renewal | Not implemented | Ingestion is the manual **Sync inbox** action |
+| Graph change notifications (webhook) and subscription renewal | **Verified** | A real email appeared in the inbox about 10 seconds after it arrived, with no click: Graph called `POST /inbox/webhook`, the sync ran as `graph-webhook`, the agent classified it. Renewal runs hourly; **Sync inbox** still works |
 | Sending a real Outlook reply | **Verified** | One approved reply sent through Graph and received; replies are never sent without a reviewer's approval |
+
+### Live updates (Graph change notifications)
+
+Graph calls the public route `POST /inbox/webhook` when mail arrives. The route is authenticated by a secret `clientState` that only this deployment and Graph know (constant-time comparison; anything else gets 401 and starts nothing). A genuine call only starts the normal sync: the notification content is never used, so the webhook adds no decision logic. Calls that arrive while a sync is running ask it to go round once more. An hourly EventBridge rule renews the subscription (mail subscriptions last about 70 hours) and runs a catch-up sync, so a missed notification delays mail by at most an hour. The Inbox page shows a green **Live updates on** indicator and refreshes every 15 seconds while the subscription is active. In sample mode there is no webhook.
 
 ### Mailbox connection
 
-The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). Still open: Graph webhooks (sync is manual) and updating the deployed e2e tests, which assume the sample mailbox.
+The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). 
 
 ## The five actions
 
@@ -172,11 +176,11 @@ Run from this folder with `make test`, `make test-live`, `make test-e2e` (they u
 
 | Layer | Count | Real or mocked |
 |---|---|---|
-| Unit (`tests/unit`) | 93 passed, 2 skipped (85% coverage) | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
+| Unit (`tests/unit`) | see `make test` (webhook, reply and path-decoding tests included) | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
 | Live (`tests/live`) | 8 | **Real** Amazon Bedrock agent and **real ClickUp list**; Outlook is the sample mailbox. Every task created is deleted afterwards |
-| Deployed e2e (`tests/e2e`) | 4 | **Real** Cognito users, deployed API, AgentCore runtime and gateway, DynamoDB and ClickUp; Outlook is the sample mailbox |
+| Deployed e2e (`tests/e2e`) | 5 + 1 skipped | **Real** Cognito users, deployed API, AgentCore runtime and gateway, DynamoDB, ClickUp, the **real mailbox** and the webhook (handshake, forged calls refused). The 8-email scenario needs the sample mailbox and skips itself when the stack reads the real one |
 | Web unit (Part 2 app) | 175 | Mocked API |
-| Browser (Playwright, production) | 8 for Inbox Automation (25 in total for the app) | Real deployed app in English and Arabic |
+| Browser (Playwright, production) | Sample scenarios: `E2E_INBOX_MODE=sample`. Real mailbox, read-only check: `E2E_INBOX_MODE=graph` (2 passed, English and Arabic) | Real deployed app in English and Arabic; the scenarios that approve and reject never run against real mail |
 
 The 11 scenarios of the brief are covered mocked and with real integrations:
 
@@ -198,7 +202,7 @@ Model output varies. The suites assert safety invariants always and action choic
 
 ## Limitations and next steps
 
-1. **Connect the real mailbox** (blocker above), verify a real Sync, a real draft and a real approved send, then add the Graph webhook (change notifications) with a scheduled subscription renewal.
+1. A real reply **draft** (as opposed to a send) has not been exercised; replies are created and sent only after approval.
 2. ClickUp search reads the list (up to 500 tasks) and matches titles locally; a much larger list needs ClickUp's search or a webhook-fed index.
 3. Duplicate matching is title similarity; semantic matching (embeddings) is a possible upgrade.
 4. The agent can be slow on a cold start (about 10 s per email); a few emails are processed in parallel.
@@ -206,7 +210,7 @@ Model output varies. The suites assert safety invariants always and action choic
 
 ## Cost and cleanup
 
-Everything is usage-based and sized for an assessment: a handful of emails costs a negligible amount in Bedrock tokens, Lambda, DynamoDB (on demand) and AgentCore. The only fixed charge is Secrets Manager (a small monthly fee per secret). CloudWatch logs are kept 30 days.
+Everything is usage-based and sized for an assessment (the hourly renewal is one tiny Lambda call and one Graph request an hour): a handful of emails costs a negligible amount in Bedrock tokens, Lambda, DynamoDB (on demand) and AgentCore. The only fixed charge is Secrets Manager (a small monthly fee per secret). CloudWatch logs are kept 30 days.
 
 Cleanup: `make destroy` (Part 2 folder) removes the stack, including the table, Lambdas, gateway, runtime and group. The two secrets are outside CDK: `aws secretsmanager delete-secret --secret-id xpand/inbox/clickup --force-delete-without-recovery` (and `.../graph`). Also revoke the Entra app registration and regenerate the ClickUp token.
 

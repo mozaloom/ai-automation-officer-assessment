@@ -27,6 +27,7 @@ export interface MessageDetail extends MessageSummary {
 export interface InboxConfig {
   mailbox: string; outlook_mode: string; clickup_mode: string; reviewer_group: string; clickup_list_url: string | null;
   members: { id: string; name: string; email: string }[]; statuses: string[];
+  webhook?: { supported: boolean; state: "off" | "creating" | "active" | "error"; expires_at: string | null; renewed_at: string | null; error: string | null };
   policy: { auto_send_replies: boolean; min_confidence: number; duplicate_high: number; duplicate_low: number; default_priority: string | null; default_status: string | null; required_for_create: string[] };
 }
 export interface EditChanges { action?: "CREATE_TASK" | "UPDATE_TASK" | "REPLY" | "IGNORE"; task?: Partial<Record<"title" | "description" | "assignee" | "priority" | "due_date" | "status", string | null>>; reply_body?: string; target_task_id?: string }

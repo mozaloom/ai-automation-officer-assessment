@@ -20,7 +20,7 @@ export default function InboxView() {
   const config = useQuery({ queryKey: ["inbox", "config"], queryFn: fetchInboxConfig, staleTime: 60_000 });
   const list = useQuery({
     queryKey: ["inbox", "messages"], queryFn: fetchMessages,
-    refetchInterval: (q) => (q.state.data?.sync?.state === "running" || q.state.data?.messages.some((m) => m.status === "PROCESSING" || m.status === "EXECUTING") ? 2500 : false),
+    refetchInterval: (q) => (q.state.data?.sync?.state === "running" || q.state.data?.messages.some((m) => m.status === "PROCESSING" || m.status === "EXECUTING") ? 2500 : config.data?.webhook?.state === "active" ? 15_000 : false),
   });
   const sync = useMutation({ mutationFn: startSync, onSuccess: () => qc.invalidateQueries({ queryKey: ["inbox"] }) });
   const messages = list.data?.messages ?? [];
@@ -37,6 +37,12 @@ export default function InboxView() {
           <h1 className="text-2xl font-bold tracking-tight text-text-dark">{t.inbox.title}</h1>
           <p className="mt-1 text-sm text-text-gray">{t.inbox.subtitle}</p>
           <p className="mt-1 text-xs text-text-gray" dir="ltr">{t.inbox.mailbox}: {config.data?.mailbox ?? "…"}{config.data?.clickup_list_url && <> · <a href={config.data.clickup_list_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand-blue hover:underline">{t.inbox.clickupList}<ExternalLink className="h-3 w-3" aria-hidden="true" /></a></>}</p>
+          {config.data?.webhook?.supported && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-text-gray" data-testid="live-updates">
+              <span className={`h-1.5 w-1.5 rounded-full ${config.data.webhook.state === "active" ? "bg-emerald-500" : config.data.webhook.state === "error" ? "bg-amber-500" : "bg-slate-300"}`} aria-hidden="true" />
+              {config.data.webhook.state === "active" ? t.inbox.live.on : config.data.webhook.state === "error" ? t.inbox.live.error : t.inbox.live.off}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <Button onClick={() => sync.mutate()} loading={running} disabled={running}><RefreshCw className="h-4 w-4" aria-hidden="true" />{running ? t.inbox.sync.running : t.inbox.sync.button}</Button>

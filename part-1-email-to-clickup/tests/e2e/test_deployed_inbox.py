@@ -1,5 +1,8 @@
 """The DEPLOYED Inbox Automation API with real Cognito tokens, real Amazon Bedrock (AgentCore runtime + gateway), real DynamoDB and the REAL
-ClickUp list. Outlook is the sample mailbox (OUTLOOK_MODE=sample) until Microsoft Graph is connected.
+ClickUp list. Two modes, chosen by how the stack is deployed (`INBOX_OUTLOOK_MODE`):
+- sample: the 8-email pipeline scenario runs against the labelled sample mailbox.
+- graph: the real mailbox xpand@medgan.ai; the pipeline scenario is skipped (it must never act on real mail) and the real-mailbox and webhook checks run.
+Tests never touch rows of real emails or the webhook subscription: only `MSG#sample-*` rows are reset.
 
 Needs AWS credentials (profile with cognito-idp admin and secretsmanager read), build/outputs.json and .demo-credentials.
 Everything created in ClickUp is deleted afterwards; the temporary non-reviewer Cognito user is deleted too."""
@@ -64,9 +67,11 @@ def clickup():
 
 
 def _reset(table):
-    """The inbox table is dedicated to this assessment: the e2e starts and ends from empty so reruns are comparable."""
+    """Starts and ends without sample-mailbox rows so reruns are comparable. Rows of real emails and the webhook subscription are never touched."""
     for page in table.meta.client.get_paginator("scan").paginate(TableName=table.name, ProjectionExpression="pk, sk"):
         for item in page["Items"]:
+            if not str(item["pk"]["S"] if isinstance(item["pk"], dict) else item["pk"]).startswith("MSG#sample-"):
+                continue
             table.delete_item(Key={"pk": item["pk"]["S"] if isinstance(item["pk"], dict) else item["pk"], "sk": item["sk"]["S"] if isinstance(item["sk"], dict) else item["sk"]})
 
 
@@ -123,6 +128,8 @@ def test_cors_headers_on_denials(cfg, outsider):
 
 # ------------------------------------------------------------------ full pipeline on the deployed stack (1 to 8, 11)
 def test_deployed_pipeline(cfg, reviewer, outsider, clickup, table):
+    if call(cfg, "GET", "/inbox/config", reviewer)[2]["outlook_mode"] != "sample":
+        pytest.skip("the 8-email scenario needs the sample mailbox; this stack reads the real mailbox")
     seed = clickup.a.create_task({"name": "Prepare the Q3 marketing report", "description": "Seed task for the deployed update scenario", "assignee_id": "246097569", "priority": 3, "status": "in progress"})
     clickup.seeded.append(seed["id"])
 
@@ -227,3 +234,25 @@ def test_real_dynamodb_conditional_writes_are_atomic(cfg):
     [t.join() for t in threads]
     assert wins.count(True) == 1
     boto3.resource("dynamodb", region_name=REGION).Table(cfg["table"]).delete_item(Key={"pk": f"MSG#{mid}", "sk": "STATE"})
+
+
+# ------------------------------------------------------------------ real mailbox and webhook (graph mode)
+def test_webhook_endpoint_is_public_but_only_answers_genuine_calls(cfg, reviewer):
+    with urllib.request.urlopen(urllib.request.Request(cfg["api"] + "/inbox/webhook?validationToken=Validation%3A%20Testing%20reachability", method="POST", data=b""), timeout=30) as r:
+        assert r.status == 200 and r.headers["Content-Type"].startswith("text/plain") and r.read() == b"Validation: Testing reachability"  # echoed as plain text
+    sync_before = call(cfg, "GET", "/inbox/messages", reviewer)[2].get("sync")
+    for forged in ({"value": [{"clientState": "guess"}]}, {"value": []}, {}):
+        assert call(cfg, "POST", "/inbox/webhook", None, forged)[0] == 401
+    assert call(cfg, "GET", "/inbox/messages", reviewer)[2].get("sync") == sync_before  # a forged call started nothing
+    assert call(cfg, "GET", "/inbox/webhook")[0] in (403, 404)  # only POST exists
+
+
+def test_real_mailbox_sync_and_live_updates(cfg, reviewer):
+    _, _, config = call(cfg, "GET", "/inbox/config", reviewer)
+    if config["outlook_mode"] != "graph":
+        pytest.skip("this stack uses the sample mailbox")
+    assert config["mailbox"] == "xpand@medgan.ai" and config["webhook"]["state"] == "active" and "client_state" not in json.dumps(config["webhook"])
+    assert call(cfg, "POST", "/inbox/sync", reviewer, {})[0] == 202
+    listing = wait_for_sync(cfg, reviewer)
+    assert listing["sync"]["state"] == "done" and listing["sync"]["failed"] == 0 and listing["mode"]["outlook"] == "graph"
+    assert any(not m["message_id"].startswith("sample-") for m in listing["messages"])

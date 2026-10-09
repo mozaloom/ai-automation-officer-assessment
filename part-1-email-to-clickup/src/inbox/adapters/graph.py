@@ -11,7 +11,7 @@ import html
 import re
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional, Protocol
 
 from ..models import Email
@@ -36,8 +36,13 @@ def _text(content: str, content_type: str) -> str:
     return re.sub(r"\n\s*\n+", "\n\n", re.sub(r"[ \t]*\n[ \t]*", "\n", content)).strip()
 
 
+def _expiry(now: float, minutes: int) -> str:
+    return datetime.fromtimestamp(now + minutes * 60, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
 class GraphAdapter:
     mode = "graph"
+    supports_webhooks = True
 
     def __init__(self, secret: SecretBox, http: HttpFn = http_json, form: Callable = http_form, clock: Callable[[], float] = time.time):
         self._secret, self._http, self._form, self._clock = secret, http, form, clock
@@ -127,6 +132,22 @@ class GraphAdapter:
         """Sends a reply. Called by the service only for an approved (or policy-permitted) proposal; never retried automatically."""
         self._call("POST", f"/me/messages/{self._graph_id(message_id)}/reply", {"comment": body}, safe_to_retry=False)
         return {"sent": True}
+
+    # ------------------------------------------------------------------ change notifications (webhooks)
+
+    def create_subscription(self, notification_url: str, client_state: str, minutes: int) -> dict:
+        """Asks Graph to call `notification_url` when a message is created in the inbox. Graph validates the URL during this call."""
+        return self._call("POST", "/subscriptions", {"changeType": "created", "notificationUrl": notification_url, "resource": "me/mailFolders('inbox')/messages",
+                                                      "expirationDateTime": _expiry(self._clock(), minutes), "clientState": client_state}, safe_to_retry=False)
+
+    def renew_subscription(self, subscription_id: str, minutes: int) -> dict:
+        return self._call("PATCH", f"/subscriptions/{urllib.parse.quote(subscription_id, safe='')}", {"expirationDateTime": _expiry(self._clock(), minutes)}, safe_to_retry=True)
+
+    def list_subscriptions(self) -> list[dict]:
+        return self._call("GET", "/subscriptions", safe_to_retry=True).get("value", [])
+
+    def delete_subscription(self, subscription_id: str) -> None:
+        self._call("DELETE", f"/subscriptions/{urllib.parse.quote(subscription_id, safe='')}", safe_to_retry=False)
 
 
 class SecretsManagerBox:
