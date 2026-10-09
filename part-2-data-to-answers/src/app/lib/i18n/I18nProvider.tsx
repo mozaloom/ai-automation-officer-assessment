@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo } from "react";
 import { directionOf, withLocale, type Locale } from "./config";
-import { formatDate, formatJod, formatNumber, formatPct } from "./format";
+import { formatDate, formatDateTime, formatJod, formatNumber, formatPct } from "./format";
 import { labelFor, packLabel, type GlossaryField } from "./glossary";
 import { MESSAGES, type Messages } from "./messages";
 
@@ -11,6 +11,7 @@ export interface I18n {
   dir: "ltr" | "rtl";
   t: Messages;
   date: (iso: string | null | undefined, style?: "medium" | "short") => string;
+  dateTime: (iso: string | null | undefined) => string;
   number: (value: number) => string;
   pct: (value: number) => string;
   jod: (value: number) => string;
@@ -28,6 +29,7 @@ export function I18nProvider({ locale, children }: { locale: Locale; children: R
     dir: directionOf(locale),
     t: MESSAGES[locale],
     date: (iso, style) => formatDate(locale, iso, style),
+    dateTime: (iso) => formatDateTime(locale, iso),
     number: (n) => formatNumber(locale, n),
     pct: formatPct,
     jod: (n) => formatJod(locale, n),

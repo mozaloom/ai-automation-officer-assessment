@@ -15,6 +15,13 @@ export function formatDate(locale: Locale, iso: string | undefined | null, style
   }).format(date);
 }
 
+/** "2026-10-05T08:30:00.000Z" -> "5 Oct 2026, 11:30" in the viewer's time zone. */
+export function formatDateTime(locale: Locale, iso: string | undefined | null): string {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return iso ?? "";
+  return new Intl.DateTimeFormat(INTL_TAG[locale], { day: "numeric", month: locale === "ar" ? "long" : "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+}
+
 export const formatNumber = (locale: Locale, value: number): string => new Intl.NumberFormat(INTL_TAG[locale]).format(value);
 export const formatPct = (value: number): string => `${value.toFixed(1)}%`;
 
