@@ -15,8 +15,8 @@ function credentials() {
 }
 
 const T = {
-  en: { email: "Email", password: "Password", signIn: "Sign in", inbox: "Inbox", review: "Review queue", activity: "Activity", sync: "Sync inbox", edit: "Edit", approve: "Approve", cancel: "Cancel", save: "Save and approve", group: "Inbox Automation" },
-  ar: { email: "البريد الإلكتروني", password: "كلمة المرور", signIn: "تسجيل الدخول", inbox: "البريد الوارد", review: "قائمة المراجعة", activity: "النشاط", sync: "مزامنة البريد", edit: "تعديل", approve: "موافقة", cancel: "إلغاء", save: "حفظ وموافقة", group: "أتمتة البريد الوارد" },
+  en: { email: "Email", password: "Password", signIn: "Sign in", inbox: "Inbox", review: "Review queue", activity: "Activity", sync: "Sync inbox", edit: "Edit", decide: "Decide", approve: "Approve", cancel: "Cancel", save: "Save and approve", group: "Inbox Automation" },
+  ar: { email: "البريد الإلكتروني", password: "كلمة المرور", signIn: "تسجيل الدخول", inbox: "البريد الوارد", review: "قائمة المراجعة", activity: "النشاط", sync: "مزامنة البريد", edit: "تعديل", decide: "قرار", approve: "موافقة", cancel: "إلغاء", save: "حفظ وموافقة", group: "أتمتة البريد الوارد" },
 } as const;
 
 async function login(page: Page, l: "en" | "ar", next: string) {
@@ -55,9 +55,10 @@ for (const l of ["en", "ar"] as const) {
       const cards = page.getByTestId("review-card");
       await expect(cards.first()).toBeVisible({ timeout: 60_000 });
       await shot(page, `${l}-inbox-02-review-queue`);
-      const blocked = cards.filter({ has: page.locator("button:disabled") }).first();
-      if (await blocked.count()) await expect(blocked.getByRole("button", { name: T[l].approve })).toBeDisabled(); // cannot approve what is not executable
-      await cards.first().getByRole("button", { name: T[l].edit }).click();
+      // an item that cannot run yet has a disabled Approve; an undecided item offers Decide instead of a dead Approve
+      const blockedApprove = page.getByRole("button", { name: T[l].approve, disabled: true });
+      if (await blockedApprove.count()) await expect(blockedApprove.first()).toBeDisabled();
+      await cards.first().getByRole("button", { name: new RegExp(`^(${T[l].edit}|${T[l].decide})$`) }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await shot(page, `${l}-inbox-03-edit-dialog`);
