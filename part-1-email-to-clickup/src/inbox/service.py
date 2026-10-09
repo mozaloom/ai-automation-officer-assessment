@@ -326,7 +326,10 @@ class InboxService:
         item = self.store.get(message_id)
         if not item:
             raise NotFound(message_id)
-        return {**self._summary(item), "body_excerpt": item.get("body_excerpt", ""), "proposal": item.get("proposal"), "execution": item.get("execution"), "error": item.get("error"),
+        problems: list[str] = []
+        if item["status"] == Status.PENDING_REVIEW.value and item.get("proposal"):
+            problems = self.executable_problems(Proposal.model_validate(item["proposal"]))  # why Approve is not possible yet (the UI shows it; the server enforces it)
+        return {**self._summary(item), "body_excerpt": item.get("body_excerpt", ""), "can_approve": item["status"] == Status.PENDING_REVIEW.value and not problems, "problems": problems, "proposal": item.get("proposal"), "execution": item.get("execution"), "error": item.get("error"),
                 "draft": item.get("draft"), "approved_by": item.get("approved_by"), "rejected_by": item.get("rejected_by"), "reject_reason": item.get("reject_reason"),
                 "audit": self.store.list_audit(message_id, 50)}
 

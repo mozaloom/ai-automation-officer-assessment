@@ -17,8 +17,15 @@ uv pip install --quiet \
   -r "$ROOT/requirements-runtime.txt"
 
 cp -r "$ROOT/src/agent" "$ROOT/src/tools" "$ROOT/src/config.py" "$PKG/"
+cp -r "$ROOT/../part-1-email-to-clickup/src/inbox" "$PKG/"   # Part 1 Inbox Reviewer agent (second runtime, entry point inbox_main.py)
 cat > "$PKG/main.py" <<'PY'
 from agent.runtime import app
+
+if __name__ == "__main__":
+    app.run()
+PY
+cat > "$PKG/inbox_main.py" <<'PY'
+from inbox.runtime_entry import app
 
 if __name__ == "__main__":
     app.run()

@@ -70,7 +70,8 @@ class BedrockTriager:
         model = BedrockModel(model_id=self.settings.model_id, region_name=self.settings.region, temperature=0.1, max_tokens=1500)
         agent = Agent(model=model, system_prompt=SYSTEM_PROMPT, tools=self.tools, callback_handler=None)
         try:
-            result = agent(build_prompt(email, context), structured_output_model=Triage)
+            # `limits` bounds the loop: without it Strands re-asks forever when the model keeps returning an invalid proposal.
+            result = agent(build_prompt(email, context), structured_output_model=Triage, limits={"turns": 8})
         except StructuredOutputException as err:
             raise ValueError("the agent did not return a valid proposal") from err
         except (ClientError, BotoCoreError, TimeoutError) as err:
@@ -79,3 +80,61 @@ class BedrockTriager:
         if not isinstance(out, Triage):
             raise ValueError("no structured proposal returned")
         return out
+
+
+def local_tools(settings: Settings) -> list:
+    """In-process stand-ins for the Gateway's read-only tools (same names and behaviour), for local runs and live tests."""
+    from strands import tool
+
+    from .tools import make_tools
+
+    impls = make_tools(settings)
+
+    @tool
+    def clickup_search_tasks(query: str, limit: int = 5) -> dict:
+        """Search the assessment ClickUp list for tasks whose title is similar to the query. Use before proposing CREATE_TASK or UPDATE_TASK."""
+        return impls["clickup_search_tasks"]({"query": query, "limit": limit})
+
+    @tool
+    def clickup_get_task(task_id: str) -> dict:
+        """Read one ClickUp task by id."""
+        return impls["clickup_get_task"]({"task_id": task_id})
+
+    return [clickup_search_tasks, clickup_get_task]
+
+
+class AgentRuntimeTriager:
+    """Calls the deployed Inbox Reviewer runtime (IAM/SigV4) and validates what comes back."""
+
+    def __init__(self, settings: Settings, client: Any = None):
+        self.settings, self._client = settings, client
+
+    def triage(self, email: Email, context: dict) -> Triage:
+        import uuid
+
+        from botocore.exceptions import BotoCoreError, ClientError
+        from pydantic import ValidationError
+
+        if self._client is None:
+            import boto3
+            from botocore.config import Config
+
+            self._client = boto3.client("bedrock-agentcore", region_name=self.settings.region, config=Config(read_timeout=110, retries={"max_attempts": 2}))
+        try:
+            response = self._client.invoke_agent_runtime(
+                agentRuntimeArn=self.settings.agent_runtime_arn, runtimeSessionId=f"inbox-{uuid.uuid4()}",  # one fresh session per email: no cross-email memory
+                payload=json.dumps({"email": email.model_dump(mode="json"), "context": context}).encode(),
+            )
+            raw = response["response"].read()
+        except (ClientError, BotoCoreError, TimeoutError) as err:
+            raise TriageUnavailable(f"the agent runtime is not available ({type(err).__name__})") from None
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            raise ValueError("the agent runtime returned something that is not JSON") from None
+        if not isinstance(data, dict) or "error" in data:
+            raise ValueError("the agent runtime refused the request")
+        try:
+            return Triage.model_validate(data)
+        except ValidationError as err:
+            raise ValueError("the agent runtime returned an invalid proposal") from err

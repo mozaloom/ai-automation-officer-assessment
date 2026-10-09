@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from conftest import make_email
+from helpers import make_email
 from inbox.agent import SYSTEM_PROMPT, build_prompt
 from inbox.config import Settings
 from inbox import tools

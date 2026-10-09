@@ -41,6 +41,8 @@ class Store(Protocol):
     def list_messages(self, limit: int = 100) -> list[dict]: ...
     def append_audit(self, message_id: str, event: dict) -> None: ...
     def list_audit(self, message_id: Optional[str] = None, limit: int = 100) -> list[dict]: ...
+    def put_meta(self, key: str, value: dict) -> None: ...
+    def get_meta(self, key: str) -> Optional[dict]: ...
 
 
 def _plain(value: Any) -> Any:
@@ -109,8 +111,17 @@ class MemoryStore:
 
     def list_messages(self, limit=100) -> list[dict]:
         with self._lock:
-            rows = list(self._items.values())
+            rows = [i for i in self._items.values() if i["status"] != "META"]
         return json.loads(json.dumps(sorted(rows, key=lambda i: i.get("received_at", ""), reverse=True)[:limit]))
+
+    def put_meta(self, key, value) -> None:
+        with self._lock:
+            self._items[f"META#{key}"] = {**value, "message_id": f"META#{key}", "status": "META"}
+
+    def get_meta(self, key) -> Optional[dict]:
+        with self._lock:
+            found = self._items.get(f"META#{key}")
+            return json.loads(json.dumps(found)) if found else None
 
     def append_audit(self, message_id, event) -> None:
         with self._lock:
@@ -202,6 +213,13 @@ class DynamoStore:
 
     def list_messages(self, limit=100) -> list[dict]:
         return self._query("gsi2", "gsi2pk", "FEED#MSG", limit)
+
+    def put_meta(self, key, value) -> None:
+        self._table.put_item(Item={**json.loads(json.dumps(value), parse_float=Decimal), "pk": f"META#{key}", "sk": "STATE"})
+
+    def get_meta(self, key) -> Optional[dict]:
+        found = self._table.get_item(Key={"pk": f"META#{key}", "sk": "STATE"}, ConsistentRead=True).get("Item")
+        return _plain(found) if found else None
 
     def append_audit(self, message_id, event) -> None:
         at = iso(utcnow())

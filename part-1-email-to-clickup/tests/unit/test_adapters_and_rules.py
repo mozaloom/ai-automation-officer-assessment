@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from conftest import make_email
+from helpers import make_email
 from inbox.adapters.base import AdapterError
 from inbox.adapters.clickup import ClickUpAdapter
 from inbox.config import PolicyConfig
@@ -134,3 +134,22 @@ def test_the_external_check_uses_the_real_recipient_not_the_agents_claim():
     assert decide(lie, make_email(sender="khaled@medgan.ai"), None, [], cfg).route == "auto"
     spoof = make_email(sender="x@medgan.ai.evil.com")
     assert is_external(spoof.sender, cfg) and decide(lie, spoof, None, [], cfg).route == "review"
+
+
+def test_the_schema_tolerates_common_model_slips_but_not_real_nonsense():
+    t = Triage.model_validate({"action": "CREATE_TASK", "confidence": 0.9, "missing_fields": {}, "sensitivity_reasons": "contract", "target_task_id": 12345,
+                               "task": {"title": "Do it", "assignee": "null", "due_date": "", "priority": " High ", "status": "N/A"}})
+    assert t.missing_fields == [] and t.sensitivity_reasons == ["contract"] and t.target_task_id == "12345"
+    assert (t.task.assignee, t.task.due_date, t.task.priority, t.task.status) == (None, None, "high", None)
+    assert Triage.model_validate({"action": "IGNORE", "confidence": 1, "missing_fields": {"assignee": "x"}}).missing_fields == ["assignee"]
+    with pytest.raises(Exception):
+        Triage.model_validate({"action": "CREATE_TASK", "confidence": 0.9, "task": {"title": "x", "priority": "asap"}})
+
+
+def test_booleans_and_numbers_from_the_model_are_coerced_safely():
+    base = {"action": "IGNORE"}
+    assert Triage.model_validate({**base, "confidence": "0.8", "sensitive": {}}).sensitive is False
+    assert Triage.model_validate({**base, "confidence": 1, "sensitive": "true"}).sensitive is True
+    assert Triage.model_validate({**base, "confidence": 1, "sensitive": None}).sensitive is False
+    with pytest.raises(Exception):
+        Triage.model_validate({**base, "confidence": "very sure"})

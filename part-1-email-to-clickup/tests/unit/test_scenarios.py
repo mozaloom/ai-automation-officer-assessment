@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from conftest import OUTSIDER, REVIEWER, ScriptedTriager, create_triage, make_email
+from helpers import OUTSIDER, REVIEWER, ScriptedTriager, create_triage, make_email
 from inbox.adapters.base import AdapterError
 from inbox.adapters.sample import SampleTasks
 from inbox.models import Action, Principal, ReplyDraft, Status, TaskDraft, Triage

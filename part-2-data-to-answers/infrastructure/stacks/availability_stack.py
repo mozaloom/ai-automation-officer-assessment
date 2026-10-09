@@ -6,6 +6,7 @@ Everything is prefixed `pos-availability` so it never collides with other apps i
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from aws_cdk import (
@@ -24,6 +25,9 @@ from aws_cdk import (
     aws_s3_assets as s3_assets,
 )
 from constructs import Construct
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "part-1-email-to-clickup" / "infrastructure"))
+from inbox_automation import InboxAutomation  # noqa: E402  (Part 1, deployed in the same stack)
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_ID = "us.amazon.nova-2-lite-v1:0"
@@ -44,6 +48,12 @@ class AvailabilityStack(Stack):
         user_pool, client = self._cognito()
         runtime = self._runtime(data_bucket, user_pool, client, web_origin)
         api = self._api(runtime, user_pool, web_origin)
+
+        InboxAutomation(
+            self, "Inbox", api=api, authorizer=self.authorizer, user_pool=user_pool, web_origin=web_origin,
+            agent_zip=ROOT / "build" / "agent.zip", lambda_zip=ROOT / "build" / "inbox-lambda.zip",
+            outlook_mode=self.node.try_get_context("inbox_outlook_mode") or "sample", clickup_mode=self.node.try_get_context("inbox_clickup_mode") or "api",
+        )
 
         web = self._web(web_origin)
 
@@ -271,7 +281,7 @@ class AvailabilityStack(Stack):
                 max_age=Duration.hours(1),
             ),
         )
-        authorizer = apigw.CognitoUserPoolsAuthorizer(self, "Authorizer", cognito_user_pools=[user_pool], authorizer_name="pos-availability-cognito", identity_source="method.request.header.Authorization")
+        self.authorizer = authorizer = apigw.CognitoUserPoolsAuthorizer(self, "Authorizer", cognito_user_pools=[user_pool], authorizer_name="pos-availability-cognito", identity_source="method.request.header.Authorization")
         validator = apigw.RequestValidator(self, "Validator", rest_api=api, request_validator_name="validate-body-and-params", validate_request_body=True, validate_request_parameters=True)
         ask_model = api.add_model("AskModel", content_type=JSON, model_name="AskRequest", schema=apigw.JsonSchema(
             schema=apigw.JsonSchemaVersion.DRAFT4, type=apigw.JsonSchemaType.OBJECT, required=["prompt"], additional_properties=False,

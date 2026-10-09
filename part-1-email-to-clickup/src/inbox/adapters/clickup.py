@@ -23,6 +23,10 @@ class ClickUpAdapter:
             raise ValueError("ClickUp token, list_id and team_id are required")
         self._token, self.list_id, self.team_id, self._http, self._sleep = token, str(list_id), str(team_id), http, sleep
 
+    @property
+    def list_url(self) -> str:
+        return f"https://app.clickup.com/{self.team_id}/v/li/{self.list_id}"
+
     @classmethod
     def from_secret(cls, secret: dict, **kw) -> "ClickUpAdapter":
         return cls(secret["token"], secret["list_id"], secret["team_id"], **kw)

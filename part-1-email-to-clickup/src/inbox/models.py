@@ -58,10 +58,19 @@ class TaskDraft(BaseModel):
     due_date: Optional[date] = None
     status: Optional[str] = Field(default=None, max_length=60)
 
-    @field_validator("title", "description", "assignee", "status", mode="before")
+    @field_validator("title", "description", "assignee", "status", "due_date", "priority", mode="before")
     @classmethod
     def _blank_is_none(cls, value: Any) -> Any:
-        return None if isinstance(value, str) and not value.strip() else (value.strip() if isinstance(value, str) else value)
+        """Models often send "" or "null" for "not stated": that is None, never a value."""
+        if isinstance(value, str):
+            value = value.strip()
+            return None if value.lower() in ("", "null", "none", "n/a", "unknown", "not specified") else value
+        return value
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _priority_lower(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class ReplyDraft(BaseModel):
@@ -84,6 +93,40 @@ class Triage(BaseModel):
     missing_fields: list[str] = Field(default_factory=list)
     sensitive: bool = False
     sensitivity_reasons: list[str] = Field(default_factory=list)
+
+    @field_validator("missing_fields", "sensitivity_reasons", mode="before")
+    @classmethod
+    def _as_list(cls, value: Any) -> Any:
+        """The model sometimes returns {} or a bare string where a list belongs."""
+        if value is None or value == {}:
+            return []
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        if isinstance(value, dict):
+            return [str(k) for k in value]
+        return value
+
+    @field_validator("sensitive", mode="before")
+    @classmethod
+    def _as_bool(cls, value: Any) -> Any:
+        if value is None or value == {} or value == []:
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in ("true", "yes", "1")
+        return value
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _as_number(cls, value: Any) -> Any:
+        try:
+            return float(value) if isinstance(value, str) else value
+        except ValueError:
+            return value
+
+    @field_validator("target_task_id", mode="before")
+    @classmethod
+    def _id_as_text(cls, value: Any) -> Any:
+        return None if value in (None, "", "null") else str(value)
 
     @model_validator(mode="after")
     def _action_has_its_payload(self) -> "Triage":
