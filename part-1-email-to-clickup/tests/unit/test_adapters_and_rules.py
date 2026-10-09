@@ -114,8 +114,14 @@ def test_policy_basics():
     assert review.route == "review" and review.reasons == ["unclear"]
 
 
-def test_triage_schema_rejects_inconsistent_output():
-    for bad in ({"action": "CREATE_TASK", "confidence": 0.9}, {"action": "UPDATE_TASK", "confidence": 0.9, "task": {"title": "x"}}, {"action": "REPLY", "confidence": 0.9}, {"action": "DELETE_EVERYTHING", "confidence": 1}, {"action": "IGNORE", "confidence": 3}):
+def test_an_action_without_its_payload_degrades_to_human_review_never_to_an_error():
+    for action, extra, field in (("CREATE_TASK", {}, "task"), ("UPDATE_TASK", {"task": {"title": "x"}}, "target_task_id"), ("REPLY", {"reply": None}, "reply")):
+        t = Triage.model_validate({"action": action, "confidence": 0.9, **extra})
+        assert t.action == Action.HUMAN_REVIEW and field in t.missing_fields and action in t.rationale
+
+
+def test_triage_schema_rejects_real_nonsense():
+    for bad in ({"action": "DELETE_EVERYTHING", "confidence": 1}, {"action": "IGNORE", "confidence": 3}, {"confidence": 0.5}):
         with pytest.raises(Exception):
             Triage.model_validate(bad)
     ok = Triage.model_validate({"action": "CREATE_TASK", "confidence": 0.8, "task": {"title": "  Hello  ", "assignee": "  ", "priority": "high", "due_date": "2026-10-25"}})

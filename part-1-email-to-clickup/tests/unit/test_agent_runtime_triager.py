@@ -61,6 +61,15 @@ def test_permanent_errors_are_not_retried():
         assert len(c.calls) == 1 and code in str(e.value)
 
 
+def test_an_unavailable_answer_from_the_runtime_is_retryable_but_an_invalid_proposal_is_not():
+    t, _ = triager({"error": {"code": "unavailable", "message": "x"}})
+    with pytest.raises(TriageUnavailable):
+        t.triage(make_email(), {})
+    t, _ = triager({"error": {"code": "invalid_proposal", "message": "x"}})
+    with pytest.raises(ValueError):
+        t.triage(make_email(), {})
+
+
 def test_garbage_or_refusals_become_value_errors_so_a_person_decides():
     for bad in (b"not json", {"error": {"code": "invalid_request"}}, {"action": "DELETE_ALL", "confidence": 1}, [1, 2]):
         t, _ = triager(bad)

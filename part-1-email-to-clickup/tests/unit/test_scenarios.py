@@ -225,11 +225,18 @@ def test_a_rejected_request_failure_is_not_retryable(world):
 
 def test_invalid_agent_output_becomes_a_review_item_not_an_action(world):
     try:
-        Triage.model_validate({"action": "CREATE_TASK", "confidence": 0.9})
+        Triage.model_validate({"action": "DELETE_EVERYTHING", "confidence": 0.9})
     except ValidationError as err:
         world.triager.error = err
     out = run(world, make_email("m-9e"))
     assert out["status"] == Status.PENDING_REVIEW.value and world.tasks.created == []
+    assert any(a["event"] == "triage_invalid" for a in world.store.list_audit("m-9e"))
+
+
+def test_an_incomplete_proposal_is_reviewed_not_executed(world):
+    run(world, make_email("m-9g"), Triage.model_validate({"action": "REPLY", "confidence": 1.0, "reply": None}))  # the model chose REPLY but wrote nothing
+    item = world.store.get("m-9g")
+    assert item["status"] == Status.PENDING_REVIEW.value and item["proposal"]["action"] == "HUMAN_REVIEW" and world.mail.sent == []
 
 
 def test_low_confidence_is_reviewed(world):

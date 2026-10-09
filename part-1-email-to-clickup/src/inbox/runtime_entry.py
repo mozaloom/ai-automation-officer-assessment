@@ -13,6 +13,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from .agent import BedrockTriager
 from .config import Settings
 from .models import Email
+from .service import TriageUnavailable
 
 settings = Settings.from_env()
 logging.basicConfig(level=logging.INFO)
@@ -33,11 +34,16 @@ def invoke(payload, context=None):
     except Exception:
         return {"error": {"code": "invalid_request", "message": "payload.email is not a valid email"}}
     ctx = payload.get("context") or {}
-    if settings.gateway_url:
-        with _gateway_client() as mcp:
-            triage = BedrockTriager(settings, mcp.list_tools_sync()).triage(email, ctx)
-    else:
-        triage = BedrockTriager(settings, []).triage(email, ctx)
+    try:
+        if settings.gateway_url:
+            with _gateway_client() as mcp:
+                triage = BedrockTriager(settings, mcp.list_tools_sync()).triage(email, ctx)
+        else:
+            triage = BedrockTriager(settings, []).triage(email, ctx)
+    except TriageUnavailable as err:
+        return {"error": {"code": "unavailable", "message": str(err)}}  # the caller may retry
+    except ValueError as err:
+        return {"error": {"code": "invalid_proposal", "message": str(err)}}  # a clean answer, not an HTTP 500: the caller routes it to a person
     return triage.model_dump(mode="json")
 
 

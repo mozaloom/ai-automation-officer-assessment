@@ -130,12 +130,17 @@ class Triage(BaseModel):
 
     @model_validator(mode="after")
     def _action_has_its_payload(self) -> "Triage":
-        if self.action == Action.CREATE_TASK and self.task is None:
-            raise ValueError("CREATE_TASK needs task fields")
-        if self.action == Action.UPDATE_TASK and (self.task is None or not self.target_task_id):
-            raise ValueError("UPDATE_TASK needs target_task_id and the changed task fields")
-        if self.action == Action.REPLY and self.reply is None:
-            raise ValueError("REPLY needs a reply draft")
+        """An action without what it needs degrades to HUMAN_REVIEW: a person decides. It is never executed, and never an error loop."""
+        missing = (
+            "task" if self.action == Action.CREATE_TASK and self.task is None
+            else "target_task_id" if self.action == Action.UPDATE_TASK and (self.task is None or not self.target_task_id)
+            else "reply" if self.action == Action.REPLY and self.reply is None
+            else None
+        )
+        if missing:
+            self.rationale = f"The agent chose {self.action.value} but gave no {missing}. {self.rationale}".strip()[:1200]
+            self.missing_fields = [*self.missing_fields, missing]
+            self.action = Action.HUMAN_REVIEW
         return self
 
 
