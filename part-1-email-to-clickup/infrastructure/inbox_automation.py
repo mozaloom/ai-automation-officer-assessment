@@ -6,6 +6,7 @@ New resources (all prefixed `xpand-inbox`; remove with `cdk destroy`; see the Pa
 - Lambda `inbox-tools`: the READ-ONLY tools, exposed to the model as MCP tools through an AgentCore Gateway Lambda target.
 - AgentCore Gateway (IAM inbound) and a second AgentCore Runtime (IAM inbound) running the Strands agent.
 - Cognito group `inbox-reviewers`.
+- Public route `POST /inbox/webhook` (Microsoft Graph change notifications, authenticated by clientState) and an hourly EventBridge rule that renews the subscription.
 Secrets (`xpand/inbox/clickup`, `xpand/inbox/graph`) are created outside CDK by the setup scripts so no secret value is ever in a template.
 """
 
@@ -14,7 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway as apigw, aws_bedrockagentcore as agentcore, aws_cognito as cognito, aws_dynamodb as ddb, aws_iam as iam, aws_lambda as lambda_, aws_logs as logs, aws_s3_assets as s3_assets
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway as apigw, aws_bedrockagentcore as agentcore, aws_cognito as cognito, aws_dynamodb as ddb, aws_events as events, aws_events_targets as targets, aws_iam as iam, aws_lambda as lambda_, aws_logs as logs, aws_s3_assets as s3_assets
 from constructs import Construct
 
 PART1 = Path(__file__).resolve().parents[1]
@@ -149,6 +150,15 @@ class InboxAutomation(Construct):
         for action in ("approve", "reject", "edit"):
             add(review_item, action, "POST")
         add(inbox, "activity", "GET")
+
+        # Microsoft Graph calls this route, not a signed-in user: no Cognito authorizer. It is authenticated by the secret clientState in the
+        # notification (the handler rejects anything else), and the handshake only echoes a printable token. Unknown callers cost one table read.
+        webhook = inbox.add_resource("webhook")
+        webhook.add_method("POST", integration, authorization_type=apigw.AuthorizationType.NONE)
+
+        # Hourly: renew the Graph subscription (mail subscriptions last about 70 hours) and run a catch-up sync, so a missed notification delays mail by at most an hour.
+        events.Rule(self, "Renew", rule_name=f"{PREFIX}-renew", schedule=events.Schedule.rate(Duration.hours(1)),
+                    targets=[targets.LambdaFunction(api_fn, event=events.RuleTargetInput.from_object({"job": "renew", "notification_url": api.url_for_path("/inbox/webhook")}), retry_attempts=0)])
 
         CfnOutput(self, "InboxTableName", value=self.table.table_name)
         CfnOutput(self, "InboxGatewayUrl", value=self.gateway.gateway_url)

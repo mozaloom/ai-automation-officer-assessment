@@ -141,6 +141,7 @@ export const en = {
     title: "Inbox",
     subtitle: "Work-request emails, what the agent proposes, and what happened.",
     mailbox: "Mailbox",
+    live: { on: "Live updates on: new mail appears within seconds", off: "Live updates off: use Sync inbox", error: "Live updates are paused: the hourly check keeps trying" },
     sampleBanner: (what: string) => `SAMPLE MODE: ${what} is a clearly labelled test adapter, not the real service.`,
     sampleMail: "the mailbox",
     sampleClickUp: "ClickUp",

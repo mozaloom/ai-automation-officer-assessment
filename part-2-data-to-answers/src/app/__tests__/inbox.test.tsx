@@ -69,6 +69,18 @@ describe("InboxView", () => {
     expect(screen.getByTestId("sync-status")).toHaveTextContent("Not synced yet");
   });
 
+  it("says whether live updates are on, and stays quiet for a mailbox that cannot send them", async () => {
+    api.fetchMessages.mockResolvedValue({ messages: [], sync: null, mode: { outlook: "graph", clickup: "api" } });
+    api.fetchInboxConfig.mockResolvedValue({ ...config, webhook: { supported: true, state: "active", expires_at: "2026-10-12T16:34:28Z", renewed_at: null, error: null } });
+    const first = wrap(<InboxView />);
+    expect(await screen.findByTestId("live-updates")).toHaveTextContent("Live updates on");
+    first.unmount();
+    api.fetchInboxConfig.mockResolvedValue({ ...config, webhook: { supported: false, state: "off", expires_at: null, renewed_at: null, error: null } });
+    wrap(<InboxView />);
+    expect(await screen.findByTestId("sync-status")).toBeInTheDocument();
+    expect(screen.queryByTestId("live-updates")).not.toBeInTheDocument();
+  });
+
   it("starts a sync and shows progress", async () => {
     api.fetchMessages.mockResolvedValue({ messages: [], sync: null, mode: { outlook: "graph", clickup: "api" } });
     api.startSync.mockResolvedValue({ state: "running" });

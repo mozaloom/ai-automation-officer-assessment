@@ -20,6 +20,7 @@ from .config import Settings
 from .models import Principal
 from .service import Conflict, Forbidden, InboxService, Invalid, NotFound
 from .store import iso, utcnow
+from .webhook import Webhooks, valid_validation_token
 from .wiring import build_service
 
 log = logging.getLogger("inbox.api")
@@ -56,6 +57,10 @@ def handler(event: dict, context: Any = None, service: Optional[InboxService] = 
     svc = service or _service_instance()
     if event.get("job") == "sync":  # asynchronous worker invocation (not reachable from API Gateway)
         return _run_sync(svc, event)
+    if event.get("job") == "renew":  # EventBridge schedule (not reachable from API Gateway)
+        return _renew(svc, event, invoke_async)
+    if event.get("resource") == "/inbox/webhook":  # called by Microsoft Graph, not by a signed-in user: authenticated by clientState instead
+        return _webhook(svc, event, invoke_async)
     principal = principal_from(event)
     method, resource = event.get("httpMethod", ""), event.get("resource", "")
     params = {k: unquote(v) for k, v in (event.get("pathParameters") or {}).items()}  # API Gateway leaves path parameters percent-encoded; Graph ids look like <x@y>
@@ -130,6 +135,7 @@ def _config(svc: InboxService) -> dict:
     except AdapterError:
         members, statuses = [], []
     return {"members": members, "statuses": statuses, "clickup_list_url": getattr(svc.tasks, "list_url", None), "mailbox": svc.settings.mailbox, "outlook_mode": svc.mail.mode, "clickup_mode": svc.tasks.mode, "reviewer_group": svc.settings.reviewer_group,
+            "webhook": Webhooks(svc.store, svc.mail).status(),
             "policy": {"auto_send_replies": p.auto_send_replies, "min_confidence": p.min_confidence, "duplicate_high": p.duplicate_high, "duplicate_low": p.duplicate_low,
                        "default_priority": p.default_priority, "default_status": p.default_status, "required_for_create": list(p.required_for_create)}}
 
@@ -138,6 +144,7 @@ def _start_sync(svc: InboxService, principal: Principal, invoke_async: Optional[
     svc._require_reviewer(principal)
     current = svc.store.get_meta("sync") or {}
     if current.get("state") == "running" and current.get("lease_until", "") > iso(utcnow()):
+        svc.store.put_meta("sync", {**current, "again": True})  # mail may have arrived after the running pass listed the inbox: the worker goes round once more
         return _response(202, {**current, "already_running": True})
     meta = {"state": "running", "started_at": iso(utcnow()), "lease_until": iso(utcnow().replace(microsecond=0) + __import__("datetime").timedelta(minutes=10)), "requested_by": principal.email or principal.user_id}
     svc.store.put_meta("sync", meta)
@@ -154,17 +161,67 @@ def _invoke_self(payload: dict) -> None:
 def _run_sync(svc: InboxService, event: dict) -> dict:
     principal = Principal.model_validate(event["principal"])
     svc._require_reviewer(principal)  # re-checked in the worker: the payload is not trusted just because it arrived
+    summary = _sync_once(svc, principal)
+    for _ in range(2):  # a request that arrived while this pass was running asks for one more pass
+        meta = svc.store.get_meta("sync") or {}
+        if "error" in summary or not meta.get("again"):
+            break
+        svc.store.put_meta("sync", {**meta, "state": "running", "again": False, "lease_until": iso(utcnow() + __import__("datetime").timedelta(minutes=10))})
+        summary = _sync_once(svc, principal)
+    return summary
+
+
+def _sync_once(svc: InboxService, principal: Principal) -> dict:
     started = (svc.store.get_meta("sync") or {}).get("started_at", iso(utcnow()))
+
+    def finish(state: dict) -> None:  # keep a pending "run again" request that arrived while this pass was working
+        svc.store.put_meta("sync", {**state, "again": bool((svc.store.get_meta("sync") or {}).get("again"))})
+
     try:
         emails = svc.mail.list_recent_emails(svc.settings.sync_limit)
         with ThreadPoolExecutor(max_workers=3) as pool:
             outcomes = list(pool.map(svc.process, emails))
         summary = {"fetched": len(emails), "new": sum(o["outcome"] == "processed" for o in outcomes), "duplicates": sum(o["outcome"] == "duplicate" for o in outcomes), "failed": sum(o["outcome"] == "failed" for o in outcomes)}
-        svc.store.put_meta("sync", {"state": "done", "started_at": started, "finished_at": iso(utcnow()), **summary, "requested_by": principal.email})
+        finish({"state": "done", "started_at": started, "finished_at": iso(utcnow()), **summary, "requested_by": principal.email})
         svc._audit("-", "sync", principal, outcome="ok", detail=f"{summary['new']} new, {summary['duplicates']} already known, {summary['failed']} failed")
         return summary
     except Exception as err:
         code = getattr(err, "code", type(err).__name__)
-        svc.store.put_meta("sync", {"state": "failed", "started_at": started, "finished_at": iso(utcnow()), "error": str(code), "requested_by": principal.email})
+        finish({"state": "failed", "started_at": started, "finished_at": iso(utcnow()), "error": str(code), "requested_by": principal.email})
         svc._audit("-", "sync_failed", principal, outcome="failed", detail=str(code))
         return {"error": str(code)}
+
+
+def _system_principal(svc: InboxService) -> Principal:
+    return Principal(user_id="system:webhook", email="graph-webhook", groups=[svc.settings.reviewer_group])
+
+
+def _webhook(svc: InboxService, event: dict, invoke_async: Optional[Callable[[dict], None]]) -> dict:
+    token = (event.get("queryStringParameters") or {}).get("validationToken")
+    if token is not None:  # Graph's handshake when a subscription is created: echo the token as plain text
+        if not valid_validation_token(token):
+            return {"statusCode": 400, "headers": {"Content-Type": "text/plain"}, "body": "bad token"}
+        return {"statusCode": 200, "headers": {"Content-Type": "text/plain", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}, "body": token}
+    try:
+        payload = _body(event)
+    except _BadRequest:
+        return {"statusCode": 400, "headers": {"Content-Type": "text/plain"}, "body": "bad request"}
+    if not Webhooks(svc.store, svc.mail).genuine(payload):
+        log.warning("webhook rejected: unknown clientState")
+        return {"statusCode": 401, "headers": {"Content-Type": "text/plain"}, "body": "unauthorised"}
+    _start_sync(svc, _system_principal(svc), invoke_async)  # the notification content is not used: the sync reads the mailbox itself
+    return {"statusCode": 202, "headers": {"Content-Type": "text/plain"}, "body": "accepted"}
+
+
+def _renew(svc: InboxService, event: dict, invoke_async: Optional[Callable[[dict], None]]) -> dict:
+    """Hourly: keep the subscription alive and run a catch-up sync, so a missed notification delays mail by at most an hour."""
+    out: dict = {"webhook": "unavailable"}
+    if getattr(svc.mail, "supports_webhooks", False) and event.get("notification_url"):
+        try:
+            out = {"webhook": Webhooks(svc.store, svc.mail).ensure(event["notification_url"]).get("state")}
+        except AdapterError as err:
+            log.warning("webhook renewal failed", extra={"code": err.code})
+            out = {"webhook": "error", "code": err.code}
+    if getattr(svc.mail, "supports_webhooks", False):
+        _start_sync(svc, _system_principal(svc), invoke_async)
+    return out
