@@ -30,6 +30,7 @@ def test_1_clear_request_creates_a_real_task_with_the_right_fields(live):
     task = live.tasks.get_task(item["execution"]["task_id"])
     assert live.tasks.created_ids == [task["id"]]  # exactly one real task was created
     assert "sales report" in task["name"].lower() and task["assignees"] == ["Mohammed Zaloom"] and task["priority"] == "high" and task["due_date"] == "2026-10-25" and task["status"] == "to do"
+    assert task["custom"].get("Sender Email Address") == "layla.omar@medgan.ai" and task["custom"].get("Inbox Action") == "Route" and task["custom"].get("Message Received Date", "").startswith("2026-10-09")  # the list's custom fields, read back from real ClickUp
     assert f"[email:{e.message_id}]" in task["description"]
 
 

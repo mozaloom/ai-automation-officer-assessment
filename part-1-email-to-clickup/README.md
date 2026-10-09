@@ -28,6 +28,11 @@ More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-d
 
 Graph calls the public route `POST /inbox/webhook` when mail arrives. The route is authenticated by a secret `clientState` that only this deployment and Graph know (constant-time comparison; anything else gets 401 and starts nothing). A genuine call only starts the normal sync: the notification content is never used, so the webhook adds no decision logic. Calls that arrive while a sync is running ask it to go round once more. An hourly EventBridge rule renews the subscription (mail subscriptions last about 70 hours) and runs a catch-up sync, so a missed notification delays mail by at most an hour. The Inbox page shows a green **Live updates on** indicator and refreshes every 15 seconds while the subscription is active. In sample mode there is no webhook.
 
+### Reply drafts and ClickUp columns
+
+- **Drafts:** when the agent proposes a reply, a real **draft** is created in the mailbox so the reviewer can see it in Outlook. Approving sends *that draft* with the reviewer's final text (no second message, no orphan draft); rejecting deletes it. A draft that was deleted meanwhile falls back to a plain reply. Nothing is ever sent without approval.
+- **ClickUp columns:** a created task fills the list's custom fields by name: **Sender Email Address** (the sender), **Message Received Date**, **Source Message Link** (opens the email in Outlook on the web), **Inbox Action** (`Route`, or `Escalate` when the email is sensitive). A field the list does not have, or an unknown dropdown option, is skipped, never invented. **Reply Required** is not set because the agent does not decide it.
+
 ### Mailbox connection
 
 The Entra app registration (single tenant, public client, delegated permissions, admin-consented, assignment required for `xpand@medgan.ai` only) is in place and `xpand@medgan.ai` is signed in via `connect_outlook.sh`. Deploy with `INBOX_OUTLOOK_MODE=graph make deploy` (the default stays `sample`). 
@@ -176,10 +181,11 @@ Run from this folder with `make test`, `make test-live`, `make test-e2e` (they u
 
 | Layer | Count | Real or mocked |
 |---|---|---|
-| Unit (`tests/unit`) | see `make test` (webhook, reply and path-decoding tests included) | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
+| Unit (`tests/unit`) | 118 passed, 2 skipped | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
 | Live (`tests/live`) | 8 | **Real** Amazon Bedrock agent and **real ClickUp list**; Outlook is the sample mailbox. Every task created is deleted afterwards |
+| Demo scenario (`tests/e2e/test_real_mailbox_flow.py`, `make test-demo`) | 3 | **Real** mailbox (it emails itself as xpand@medgan.ai), real webhook, agent, Outlook drafts, ClickUp custom fields; removes everything it created |
 | Deployed e2e (`tests/e2e`) | 5 + 1 skipped | **Real** Cognito users, deployed API, AgentCore runtime and gateway, DynamoDB, ClickUp, the **real mailbox** and the webhook (handshake, forged calls refused). The 8-email scenario needs the sample mailbox and skips itself when the stack reads the real one |
-| Web unit (Part 2 app) | 175 | Mocked API |
+| Web unit (Part 2 app) | 177 | Mocked API |
 | Browser (Playwright, production) | Sample scenarios: `E2E_INBOX_MODE=sample`. Real mailbox, read-only check: `E2E_INBOX_MODE=graph` (2 passed, English and Arabic) | Real deployed app in English and Arabic; the scenarios that approve and reject never run against real mail |
 
 The 11 scenarios of the brief are covered mocked and with real integrations:
@@ -202,7 +208,7 @@ Model output varies. The suites assert safety invariants always and action choic
 
 ## Limitations and next steps
 
-1. A real reply **draft** (as opposed to a send) has not been exercised; replies are created and sent only after approval.
+1. The agent chooses reply versus task from the email text; unusual phrasing can land in the Review queue as *Human review*, where the reviewer decides (create, reply or dismiss).
 2. ClickUp search reads the list (up to 500 tasks) and matches titles locally; a much larger list needs ClickUp's search or a webhook-fed index.
 3. Duplicate matching is title similarity; semantic matching (embeddings) is a possible upgrade.
 4. The agent can be slow on a cold start (about 10 s per email); a few emails are processed in parallel.

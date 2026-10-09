@@ -19,7 +19,7 @@ export interface Proposal {
 }
 export interface AuditEvent { message_id: string; at: string; id: string; event: string; actor: string; action?: string; outcome?: string; task_id?: string; detail?: string }
 export interface MessageDetail extends MessageSummary {
-  body_excerpt: string; can_approve: boolean; problems: string[]; proposal: Proposal | null;
+  body_excerpt: string; web_link?: string | null; can_approve: boolean; problems: string[]; proposal: Proposal | null;
   execution: { task_id?: string; task_url?: string; summary?: string; sent?: boolean; adopted?: boolean; at?: string; fields?: Record<string, unknown>; changes?: string[] } | null;
   error: { code: string; message: string; retryable: boolean; stage: string; at: string } | null;
   draft: { draft_id?: string } | null; approved_by?: string; rejected_by?: string; reject_reason?: string; audit: AuditEvent[];

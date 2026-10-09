@@ -24,6 +24,7 @@ export default function ProposalView({ m }: { m: MessageDetail }) {
         </div>
         <p className="mt-0.5 text-xs text-text-gray"><bdi dir="ltr">{m.sender_name ? `${m.sender_name} <${m.sender}>` : m.sender}</bdi> · {dateTime(m.received_at)}</p>
         <p className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-wash p-3 text-sm text-text-dark [overflow-wrap:anywhere]" dir="auto">{m.body_excerpt}</p>
+        {m.web_link && <a href={m.web_link} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline">{d.openEmail}<ExternalLink className="h-3 w-3" aria-hidden="true" /></a>}
       </section>
 
       {p && (

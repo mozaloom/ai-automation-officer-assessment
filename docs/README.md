@@ -9,3 +9,5 @@
 | [`part-2-implementation-and-testing.md`](part-2-implementation-and-testing.md) | Detailed companion to section 12 of the Part 2 document: design-to-build mapping, the full test breakdown, scenarios and known limits |
 
 Part READMEs: [Part 1](../part-1-email-to-clickup/README.md) · [Part 2](../part-2-data-to-answers/README.md)
+
+- [Demo script](demo-script.md): the 6-minute walkthrough of Part 1 on the live system, mapped to the tests.

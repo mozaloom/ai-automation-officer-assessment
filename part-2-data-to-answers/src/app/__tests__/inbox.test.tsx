@@ -81,6 +81,13 @@ describe("InboxView", () => {
     expect(screen.queryByTestId("live-updates")).not.toBeInTheDocument();
   });
 
+  it("links the original email in Outlook when the mailbox provides a link", async () => {
+    api.fetchMessages.mockResolvedValue({ messages: [summary()], sync: null, mode: { outlook: "graph", clickup: "api" } });
+    api.fetchMessage.mockResolvedValue({ ...detail(), web_link: "https://outlook.office365.com/owa/?ItemID=1" });
+    wrap(<InboxView />);
+    expect(await screen.findByRole("link", { name: /Open in Outlook/ })).toHaveAttribute("href", "https://outlook.office365.com/owa/?ItemID=1");
+  });
+
   it("starts a sync and shows progress", async () => {
     api.fetchMessages.mockResolvedValue({ messages: [], sync: null, mode: { outlook: "graph", clickup: "api" } });
     api.startSync.mockResolvedValue({ state: "running" });

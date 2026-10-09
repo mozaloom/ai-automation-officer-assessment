@@ -22,6 +22,7 @@ class ClickUpAdapter:
         if not (token and list_id and team_id):
             raise ValueError("ClickUp token, list_id and team_id are required")
         self._token, self.list_id, self.team_id, self._http, self._sleep = token, str(list_id), str(team_id), http, sleep
+        self._fields: Optional[dict[str, dict]] = None
 
     @property
     def list_url(self) -> str:
@@ -78,10 +79,40 @@ class ClickUpAdapter:
     def get_task(self, task_id: str) -> dict:
         return self._norm(self._call("GET", f"/task/{task_id}", safe_to_retry=True))
 
+    def custom_fields(self) -> dict[str, dict]:
+        """The list's custom fields by lower-case name (read once per adapter). The assessment list has Sender Email Address, Message Received Date,
+        Source Message Link, Inbox Action and Reply Required; a list without a field simply does not get that value."""
+        if self._fields is None:
+            found = self._call("GET", f"/list/{self.list_id}/field", safe_to_retry=True).get("fields", [])
+            self._fields = {f["name"].strip().lower(): f for f in found}
+        return self._fields
+
+    def _custom_body(self, custom: dict) -> list[dict]:
+        out = []
+        for name, value in custom.items():
+            field = self.custom_fields().get(name.strip().lower())
+            if not field or value in (None, ""):
+                continue
+            kind = field.get("type")
+            if kind == "drop_down":  # ClickUp wants the option id, not its label
+                option = next((o["id"] for o in (field.get("type_config") or {}).get("options", []) if (o.get("name") or o.get("label") or "").strip().lower() == str(value).strip().lower()), None)
+                if option:
+                    out.append({"id": field["id"], "value": option})
+            elif kind == "date":
+                moment = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                out.append({"id": field["id"], "value": int((moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).timestamp() * 1000)})
+            elif kind == "checkbox":
+                out.append({"id": field["id"], "value": bool(value)})
+            else:  # url, email, short_text, text
+                out.append({"id": field["id"], "value": str(value)[:2000]})
+        return out
+
     # ------------------------------------------------------------------ writes (never auto-retried)
 
     def create_task(self, fields: dict) -> dict:
         body = self._body(fields)
+        if fields.get("custom"):
+            body["custom_fields"] = self._custom_body(fields["custom"])  # a read: if it fails nothing was written yet
         if fields.get("assignee_id"):
             body["assignees"] = [int(fields["assignee_id"])]
         return self._norm(self._call("POST", f"/list/{self.list_id}/task", body, safe_to_retry=False))
@@ -112,9 +143,24 @@ class ClickUpAdapter:
         return body
 
     @staticmethod
+    def _custom_values(task: dict) -> dict:
+        out: dict = {}
+        for f in task.get("custom_fields", []):
+            value = f.get("value")
+            if value in (None, ""):
+                continue
+            if f.get("type") == "drop_down":
+                options = (f.get("type_config") or {}).get("options", [])
+                value = next((o.get("name") for o in options if o.get("orderindex") == value or o.get("id") == value), value)
+            elif f.get("type") == "date":
+                value = datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc).isoformat()
+            out[f["name"]] = value
+        return out
+
+    @staticmethod
     def _norm(task: dict) -> dict:
         due = task.get("due_date")
-        return {
+        return {"custom": ClickUpAdapter._custom_values(task),
             "id": str(task["id"]), "name": task.get("name", ""), "description": task.get("description") or task.get("text_content") or "",
             "url": task.get("url", ""), "status": (task.get("status") or {}).get("status", ""),
             "assignees": [a.get("username") or a.get("email", "") for a in task.get("assignees", [])],

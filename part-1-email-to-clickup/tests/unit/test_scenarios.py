@@ -350,7 +350,7 @@ def test_a_human_review_item_cannot_be_approved_but_can_be_decided_by_the_review
 def test_the_reviewer_can_answer_or_dismiss_an_undecided_email(world):
     a, b = human_review(world, "m-21"), human_review(world, "m-22", sender="partner@acme.com")
     world.svc.edit(a, REVIEWER, {"action": "REPLY", "reply_body": "Yes, it was sent yesterday."})
-    assert world.mail.sent == [{"message_id": "m-21", "body": "Yes, it was sent yesterday."}]
+    assert world.mail.sent == [{"message_id": "m-21", "body": "Yes, it was sent yesterday.", "draft_id": None}]  # decided by the reviewer: no draft existed
     out = world.svc.edit(b, REVIEWER, {"action": "IGNORE"})
     assert out["status"] == Status.IGNORED.value and len(world.mail.sent) == 1 and world.tasks.created == []
     with pytest.raises(Conflict):

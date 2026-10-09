@@ -98,7 +98,7 @@ class InboxService:
         item = {
             "status": Status.PROCESSING.value, "lease_until": iso(now + timedelta(seconds=self.settings.lease_seconds)), "attempts": 1,
             "received_at": iso(email.received_at), "sender": email.sender, "sender_name": email.sender_name, "subject": email.subject[:200],
-            "body_excerpt": email.body[: self.settings.body_excerpt_chars], "conversation_id": email.conversation_id, "created_at": iso(now),
+            "body_excerpt": email.body[: self.settings.body_excerpt_chars], "conversation_id": email.conversation_id, "created_at": iso(now), "web_link": email.web_link,
         }
         if not self.store.claim(email.message_id, item):
             # Same message again (webhook retry, second sync, concurrent worker). Only an abandoned lease may be taken over.
@@ -191,7 +191,9 @@ class InboxService:
             if existing:  # retry after a lost answer: the earlier create did succeed
                 return {"task_id": existing.task_id, "task_url": existing.url, "adopted": True, "summary": "task already existed for this email"}
             footer = f"\n\n---\nSource email from {item.get('sender', '')}: {item.get('subject', '')[:120]}\n{MARKER.format(message_id)}"
-            task = self.tasks.create_task({"name": r.title, "description": (r.description or "") + footer, "assignee_id": r.assignee_id, "priority": r.priority, "due_date": r.due_date, "status": r.status})
+            custom = {"Sender Email Address": item.get("sender"), "Message Received Date": item.get("received_at"), "Source Message Link": item.get("web_link"),
+                      "Inbox Action": "Escalate" if proposal.triage.sensitive else "Route"}  # facts about the email and where the task was routed; nothing is guessed
+            task = self.tasks.create_task({"name": r.title, "description": (r.description or "") + footer, "assignee_id": r.assignee_id, "priority": r.priority, "due_date": r.due_date, "status": r.status, "custom": custom})
             return {"task_id": task["id"], "task_url": task["url"], "summary": f"created '{task['name'][:80]}'", "fields": self._fields_summary(r)}
         if action == Action.UPDATE_TASK and r:
             fields = {k: v for k, v in {"description": r.description, "status": r.status, "due_date": r.due_date, "assignee_id": r.assignee_id}.items() if v}
@@ -203,7 +205,7 @@ class InboxService:
             task = self.tasks.update_task(current["id"], fields)
             return {"task_id": task["id"], "task_url": task["url"], "summary": f"updated '{task['name'][:80]}'", "changes": sorted(fields)}
         if action == Action.REPLY and proposal.triage.reply:
-            self.mail.send_reply(message_id, proposal.triage.reply.body)
+            self.mail.send_reply(message_id, proposal.triage.reply.body, draft_id=(item.get("draft") or {}).get("draft_id"))  # sends the draft the reviewer saw, with their final text
             return {"sent": True, "summary": "reply sent"}
         raise AdapterError("nothing_to_execute", "the proposal has nothing executable")
 
@@ -307,7 +309,14 @@ class InboxService:
         if not self.store.transition(message_id, [Status.PENDING_REVIEW], Status.REJECTED, {"rejected_by": self._who(principal), "reject_reason": reason[:500], "rejected_at": iso(self.clock())}):
             raise Conflict("this email was already handled")
         self._audit(message_id, "rejected", principal, outcome="rejected", detail=reason[:200] or None)
-        return {"status": Status.REJECTED.value}  # no adapter was called: nothing external happened
+        draft_id = ((self.store.get(message_id) or {}).get("draft") or {}).get("draft_id")
+        if draft_id:  # the reply draft will never be sent: do not leave it in the mailbox. Nothing is sent or created.
+            try:
+                self.mail.discard_draft(draft_id)
+                self._audit(message_id, "draft_discarded", principal, outcome="ok")
+            except AdapterError as err:
+                self._audit(message_id, "draft_discard_failed", principal, outcome="failed", detail=err.code)
+        return {"status": Status.REJECTED.value}
 
     def retry(self, message_id: str, principal: Optional[Principal]) -> dict:
         """Re-run a failed message. Execution failures retry from the stored proposal (a create first looks for its own marker)."""
@@ -345,7 +354,7 @@ class InboxService:
         if item["status"] == Status.PENDING_REVIEW.value and item.get("proposal"):
             problems = self.executable_problems(Proposal.model_validate(item["proposal"]))  # why Approve is not possible yet (the UI shows it; the server enforces it)
         return {**self._summary(item), "body_excerpt": item.get("body_excerpt", ""), "can_approve": item["status"] == Status.PENDING_REVIEW.value and not problems, "problems": problems, "proposal": item.get("proposal"), "execution": item.get("execution"), "error": item.get("error"),
-                "draft": item.get("draft"), "approved_by": item.get("approved_by"), "rejected_by": item.get("rejected_by"), "reject_reason": item.get("reject_reason"),
+                "draft": item.get("draft"), "web_link": item.get("web_link"), "approved_by": item.get("approved_by"), "rejected_by": item.get("rejected_by"), "reject_reason": item.get("reject_reason"),
                 "audit": self.store.list_audit(message_id, 50)}
 
     def list_activity(self, limit: int = 100) -> list[dict]:
