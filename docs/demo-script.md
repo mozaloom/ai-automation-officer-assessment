@@ -15,7 +15,7 @@ Send each email to **xpand@medgan.ai** from any mailbox. Wait a few seconds: it 
 
 | # | Send / do | What to point out | Test that proves it |
 |---|---|---|---|
-| 1 | **Subject:** `Prepare the board slides`<br>**Body:** `Please create a task: prepare the board slides. Assign it to Xpand Assessment, high priority, due <a date next month>. Description: prepare the slides for the quarterly board meeting.` | Appears with no click. Proposed action **Create task**; every value is only what the email says (nothing invented). **Open in Outlook** opens the source mail | `test_3` |
+| 1 | **Subject:** `Prepare the board slides`<br>**Body:** `Please create a task: prepare the board slides. Assign it to Xpand Assessment, high priority, due 2026-11-15. Description: prepare the slides for the quarterly board meeting.` | Type a real date: the agent never invents one, so a placeholder leaves Due empty. Appears with no click. Proposed action **Create task**; every value is only what the email says (nothing invented). **Open in Outlook** opens the source mail | `test_3` |
 | 2 | **Review queue**: **Approve** (or **Edit and approve**; the assignee list only contains real ClickUp members) | Status Done, **Open in ClickUp** | `test_3` |
 | 3 | In ClickUp open the task | Assignee, priority, due date, plus the list columns **Sender Email Address**, **Message Received Date**, **Source Message Link** (opens the email) and **Inbox Action** = Route | `test_3`, live test 1 |
 | 4 | **Take the ClickUp screenshot now** (see below) | | |
@@ -27,7 +27,7 @@ Send each email to **xpand@medgan.ai** from any mailbox. Wait a few seconds: it 
 | 10 | **Activity** page, then **Sync inbox** | Full trail (who, what, when). Sync reports everything as already known: repeated delivery creates nothing | unit scenario 5, `test_3` |
 
 ## Taking the ClickUp screenshot
-Use **Win + PrtScn**: Windows saves the file straight to `Pictures\Screenshots` (Win + Shift + S only copies to the clipboard and saves nothing). Save it right after step 3, with the filled columns visible, and tell the assistant to add it to `docs/screenshots`.
+Use **Win + PrtScn**: Windows saves the file straight to `Pictures\Screenshots` (Win + Shift + S only copies to the clipboard and saves nothing). Save it right after step 3. Scroll the task down to the **Fields** section so all four columns are visible together with the due date (or use the list view with the columns shown), and tell the assistant to add it to `docs/screenshots`.
 
 ## What is automatic and what needs a person
 Automatic: ignore, and a create when the email gives a title, a description and a real assignee and nothing similar exists. Always a person: every reply, anything ambiguous, sensitive or possibly duplicate, a missing assignee. The agent only proposes; the backend validates, decides and executes.
