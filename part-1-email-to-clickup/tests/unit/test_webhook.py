@@ -37,6 +37,7 @@ class FakeMail:
         self.calls.append(("renew", sid))
         if self.fail_renew:
             raise self.fail_renew
+        self.subs[sid]["expirationDateTime"] = "2026-10-15T00:00:00Z"
         return self.subs[sid]
 
 
@@ -55,7 +56,8 @@ def test_ensure_creates_then_renews_and_heals_a_lost_subscription():
     hooks = Webhooks(store, mail)
     first = hooks.ensure(URL)
     assert first["state"] == "active" and mail.calls == [("create", MINUTES)] and len(first["client_state"]) >= 32
-    hooks.ensure(URL)
+    renewed = hooks.ensure(URL)
+    assert renewed["expires_at"] == "2026-10-15T00:00:00Z"  # the new expiry is recorded, not the one from creation
     assert mail.calls[-1][0] == "renew" and len([c for c in mail.calls if c[0] == "create"]) == 1
     mail.fail_renew = AdapterError("graph_404", "gone")  # Graph forgot it: create a fresh one, never leave a stale one
     healed = hooks.ensure(URL)
