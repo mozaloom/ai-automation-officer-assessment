@@ -31,7 +31,7 @@ Graph calls the public route `POST /inbox/webhook` when mail arrives. The route 
 ### Reply drafts and ClickUp columns
 
 - **Drafts:** when the agent proposes a reply, a real **draft** is created in the mailbox so the reviewer can see it in Outlook. Approving sends *that draft* with the reviewer's final text (no second message, no orphan draft); rejecting deletes it. A draft that was deleted meanwhile falls back to a plain reply. Nothing is ever sent without approval.
-- **ClickUp columns:** a created task fills the list's custom fields by name: **Sender Email Address** (the sender), **Message Received Date**, **Source Message Link** (opens the email in Outlook on the web), **Inbox Action** (`Route`, or `Escalate` when the email is sensitive). A field the list does not have, or an unknown dropdown option, is skipped, never invented. **Reply Required** is not set because the agent does not decide it.
+- **ClickUp columns:** a created task fills the list's custom fields by name: **Sender Email Address** (the sender), **Message Received Date**, **Source Message Link** (opens the email in Outlook on the web), **Inbox Action** (`Route`, or `Escalate` when the email is sensitive). A field the list does not have, or an unknown dropdown option, is skipped, never invented. The received date is stored with its time, because ClickUp shows a date-only value a day late in some time zones. The free ClickUp plan caps custom-field usage: if ClickUp refuses the columns for that reason, the task is still created without them (one retry, only after a definitive 4xx), the reviewer sees a note, and the audit trail records `custom_fields_skipped`. **Reply Required** is not set because the agent does not decide it.
 
 ### Mailbox connection
 

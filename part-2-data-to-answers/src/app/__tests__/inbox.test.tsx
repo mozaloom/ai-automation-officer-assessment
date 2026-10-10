@@ -88,6 +88,13 @@ describe("InboxView", () => {
     expect(await screen.findByRole("link", { name: /Open in Outlook/ })).toHaveAttribute("href", "https://outlook.office365.com/owa/?ItemID=1");
   });
 
+  it("tells the reviewer when ClickUp refused the list's extra columns but the task was created", async () => {
+    api.fetchMessages.mockResolvedValue({ messages: [summary()], sync: null, mode: { outlook: "graph", clickup: "api" } });
+    api.fetchMessage.mockResolvedValue(detail({ execution: { task_id: "t9", task_url: "https://app.clickup.com/t/t9", summary: "created 'X'", warning: "refused" } }));
+    wrap(<InboxView />);
+    expect(await screen.findByText(/ClickUp refused the list's extra columns/)).toBeInTheDocument();
+  });
+
   it("starts a sync and shows progress", async () => {
     api.fetchMessages.mockResolvedValue({ messages: [], sync: null, mode: { outlook: "graph", clickup: "api" } });
     api.startSync.mockResolvedValue({ state: "running" });

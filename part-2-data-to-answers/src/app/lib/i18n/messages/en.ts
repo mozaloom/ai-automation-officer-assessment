@@ -161,7 +161,7 @@ export const en = {
       notStated: "Not stated", priorityDefault: "default", assigneeUnknown: "no matching member", asWritten: "as written",
       matches: "Existing tasks that may be the same work", noMatches: "No similar task found.", matchScore: (pct: number) => `${pct}% match`, sameEmail: "created from this email",
       reply: "Proposed reply", draft: "A draft is saved in the mailbox. Nothing has been sent.",
-      result: "Result", openTask: "Open in ClickUp", openEmail: "Open in Outlook", sent: "Reply sent", adopted: "The task already existed for this email, so no second one was created.",
+      result: "Result", openTask: "Open in ClickUp", columnsSkipped: "The task was created, but ClickUp refused the list's extra columns (plan limit), so they are empty.", openEmail: "Open in Outlook", sent: "Reply sent", adopted: "The task already existed for this email, so no second one was created.",
       error: "What went wrong", retry: "Retry", notRetryable: "This failure cannot be retried. Reject it or edit the proposal.",
       history: "History", approvedBy: (who: string) => `Approved by ${who}`, rejectedBy: (who: string) => `Rejected by ${who}`,
       priorityName: { "1": "Urgent", "2": "High", "3": "Normal", "4": "Low" },

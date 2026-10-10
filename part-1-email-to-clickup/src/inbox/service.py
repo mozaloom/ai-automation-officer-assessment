@@ -194,7 +194,11 @@ class InboxService:
             custom = {"Sender Email Address": item.get("sender"), "Message Received Date": item.get("received_at"), "Source Message Link": item.get("web_link"),
                       "Inbox Action": "Escalate" if proposal.triage.sensitive else "Route"}  # facts about the email and where the task was routed; nothing is guessed
             task = self.tasks.create_task({"name": r.title, "description": (r.description or "") + footer, "assignee_id": r.assignee_id, "priority": r.priority, "due_date": r.due_date, "status": r.status, "custom": custom})
-            return {"task_id": task["id"], "task_url": task["url"], "summary": f"created '{task['name'][:80]}'", "fields": self._fields_summary(r)}
+            result = {"task_id": task["id"], "task_url": task["url"], "summary": f"created '{task['name'][:80]}'", "fields": self._fields_summary(r)}
+            if task.get("custom_skipped"):
+                result["warning"] = "the task was created without the list's custom columns (ClickUp refused them: " + task["custom_skipped"] + ")"
+                self._audit(message_id, "custom_fields_skipped", outcome="warning", task_id=task["id"], detail=task["custom_skipped"])
+            return result
         if action == Action.UPDATE_TASK and r:
             fields = {k: v for k, v in {"description": r.description, "status": r.status, "due_date": r.due_date, "assignee_id": r.assignee_id}.items() if v}
             if proposal.triage.task and proposal.triage.task.priority:

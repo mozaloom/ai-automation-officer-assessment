@@ -25,7 +25,7 @@ def test_custom_fields_are_mapped_by_name_to_ids_option_ids_and_epoch_millisecon
                                             "Inbox Action": "route", "Reply Required": None, "Unknown Column": "ignored"}})
     (m0, u0, _, _), (m1, u1, _, body) = http.calls
     assert (m0, u0.endswith("/list/L1/field"), m1, u1.endswith("/list/L1/task")) == ("GET", True, "POST", True)
-    assert body["custom_fields"] == [{"id": "f-mail", "value": "layla@medgan.ai"}, {"id": "f-date", "value": 1791570880000}, {"id": "f-link", "value": "https://outlook.office365.com/owa/?ItemID=1"}, {"id": "f-act", "value": "o-route"}]
+    assert body["custom_fields"] == [{"id": "f-mail", "value": "layla@medgan.ai"}, {"id": "f-date", "value": 1791570880000, "value_options": {"time": True}}, {"id": "f-link", "value": "https://outlook.office365.com/owa/?ItemID=1"}, {"id": "f-act", "value": "o-route"}]
 
 
 def test_a_field_the_list_does_not_have_or_an_unknown_option_is_skipped_not_invented():
@@ -125,3 +125,24 @@ def test_graph_maps_the_web_link():
     from test_graph import MSG
     g, _, _ = make((200, {"value": [{**MSG, "webLink": "https://outlook.office365.com/owa/?ItemID=1"}]}))
     assert g.list_recent_emails(1)[0].web_link == "https://outlook.office365.com/owa/?ItemID=1"
+
+
+def test_a_plan_limit_on_custom_fields_still_creates_the_task_once_without_them():
+    cu, http = adapter((200, FIELDS), (403, {"err": "Custom field usages exceeded for your plan"}), (200, {"id": "x1", "name": "N", "url": "u", "status": {"status": "to do"}}))
+    task = cu.create_task({"name": "N", "custom": {"Inbox Action": "Route"}})
+    assert task["id"] == "x1" and "exceeded" in task["custom_skipped"]
+    posts = [c for c in http.calls if c[0] == "POST"]
+    assert len(posts) == 2 and "custom_fields" in posts[0][3] and "custom_fields" not in posts[1][3]  # exactly one retry, without the columns
+
+
+def test_other_clickup_errors_are_not_retried_and_a_skip_is_reported_to_the_reviewer(world):
+    cu, http = adapter((200, FIELDS), (400, {"err": "Name is invalid"}))
+    with pytest.raises(AdapterError):
+        cu.create_task({"name": "N", "custom": {"Inbox Action": "Route"}})
+    assert len([c for c in http.calls if c[0] == "POST"]) == 1  # a real validation error is never repeated
+    real_create = world.tasks.create_task
+    world.tasks.create_task = lambda f: {**real_create(f), "custom_skipped": "Custom field usages exceeded"}
+    world.triager.script["m-skip"] = create_triage(title="Order desks", description="Order six desks.", assignee="Sara Nasser")
+    out = world.svc.process(make_email("m-skip", day=6))
+    assert out["status"] == "EXECUTED" and "without the list's custom columns" in out["warning"]
+    assert any(e["event"] == "custom_fields_skipped" for e in world.store.list_audit("m-skip"))
