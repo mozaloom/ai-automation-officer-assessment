@@ -189,11 +189,11 @@ Run from this folder with `make test`, `make test-live`, `make test-e2e` (they u
 
 | Layer | Count | Real or mocked |
 |---|---|---|
-| Unit (`tests/unit`) | 118 passed, 2 skipped | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
+| Unit (`tests/unit`) | 120 passed, 2 skipped | **Mocked**: in-memory ClickUp and mailbox, scripted agent, fake HTTP for ClickUp/Graph/AgentCore, moto for DynamoDB |
 | Live (`tests/live`) | 8 | **Real** Amazon Bedrock agent and **real ClickUp list**; Outlook is the sample mailbox. Every task created is deleted afterwards |
 | Demo scenario (`tests/e2e/test_real_mailbox_flow.py`, `make test-demo`) | 3 | **Real** mailbox (it emails itself as xpand@medgan.ai), real webhook, agent, Outlook drafts, ClickUp custom fields; removes everything it created |
 | Deployed e2e (`tests/e2e`) | 5 + 1 skipped | **Real** Cognito users, deployed API, AgentCore runtime and gateway, DynamoDB, ClickUp, the **real mailbox** and the webhook (handshake, forged calls refused). The 8-email scenario needs the sample mailbox and skips itself when the stack reads the real one |
-| Web unit (Part 2 app) | 177 | Mocked API |
+| Web unit (Part 2 app) | 178 | Mocked API |
 | Browser (Playwright, production) | Sample scenarios: `E2E_INBOX_MODE=sample`. Real mailbox, read-only check: `E2E_INBOX_MODE=graph` (2 passed, English and Arabic) | Real deployed app in English and Arabic; the scenarios that approve and reject never run against real mail |
 
 The 11 scenarios of the brief are covered mocked and with real integrations:

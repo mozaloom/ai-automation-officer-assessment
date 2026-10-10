@@ -10,6 +10,13 @@ The same scenario is automated as `make test-demo` (folder `part-1-email-to-clic
 4. Have Outlook open as the sender (any mailbox) and, optionally, `xpand@medgan.ai` Drafts in Outlook on the web.
 5. Only if you want to run tests afterwards: `aws sso login --profile pocs`. The demo itself needs no AWS login.
 
+## Demo day checklist (Monday)
+- [ ] https://xpand.medgan.ai opens and the demo reviewer can sign in; Inbox shows **Live updates on**, no SAMPLE MODE banner, and is empty.
+- [ ] ClickUp list **XPAND / Inbox Automation Tasks** is empty. Log in as the Xpand user in your own browser (ClickUp's reCAPTCHA blocks automated logins). Close the purple notifications banner.
+- [ ] Outlook on the web is open as `xpand@medgan.ai` (to show Drafts and the reply arriving) and a second mailbox is ready to send from, or send from `xpand@medgan.ai` to itself.
+- [ ] Do **not** run `make test-live` or `make test-demo` right before the demo: each run creates ClickUp tasks, and the free ClickUp plan caps custom-field usage. Everything was rehearsed and passed the day before.
+- [ ] If asked about tests: unit 120 + 188 + 178 web, live 8, deployed e2e, real-mailbox demo e2e 3, Playwright 16 + 2, all passing.
+
 ## The walkthrough
 Send each email to **xpand@medgan.ai** from any mailbox. Wait a few seconds: it appears in the Inbox by itself (Microsoft Graph webhook).
 
@@ -23,7 +30,7 @@ Send each email to **xpand@medgan.ai** from any mailbox. Wait a few seconds: it 
 | 6 | **Approve** | The draft is sent and arrives in the sender's inbox; Drafts is empty (no orphan); approving again is refused | `test_1` |
 | 7 | **Subject:** `Meeting time`<br>**Body:** `Can you confirm the time of the planning meeting next week? A short reply is enough.` then **Reject** (reason optional) | The draft is deleted, nothing is sent, **Activity** shows `draft_discarded` | `test_2` |
 | 8 | **Subject:** `Office closed Monday`<br>**Body:** `FYI only, no action needed: the office is closed next Monday. Thanks.` | **Ignored**, no task | unit scenario 2 |
-| 9 | **Subject:** `Contract question`, from an outside address, **Body:** `Please confirm the contract termination date and send us the signed legal agreement.` | Sensitive and external: goes to **Review queue**, never runs by itself | unit scenario 7 |
+| 9 | **Subject:** `Contract question`<br>**Body:** `Please confirm the contract termination date and send us the signed legal agreement and bank details today.` | Sensitive (contract, legal, bank): goes to the **Review queue** as *Human review*, never runs by itself. Replies to outside senders are always held too | rehearsal step 9, unit scenario 7 |
 | 10 | **Activity** page, then **Sync inbox** | Full trail (who, what, when). Sync reports everything as already known: repeated delivery creates nothing | unit scenario 5, `test_3` |
 
 ## Taking the ClickUp screenshot
@@ -43,3 +50,13 @@ make test-live   # real Bedrock agent + real ClickUp list
 make test-e2e    # deployed API: Cognito, DynamoDB, webhook, real mailbox sync
 make test-demo   # the scenario above on the real mailbox (it emails itself and cleans up)
 ```
+
+## If something goes wrong
+| Symptom | What to do |
+|---|---|
+| An email does not appear after about 15 seconds | Click **Sync inbox**. The webhook is only a shortcut; an hourly job also syncs, and the manual button always works |
+| A task shows empty custom columns, with the note "ClickUp refused the list's extra columns" | The free ClickUp plan's custom-field cap was reached. The task itself is correct. Say so, and continue |
+| ClickUp shows Message Received Date as "Tomorrow" | It is a task created before the date fix. New tasks show "Today" |
+| The agent proposes *Human review* for an email you expected to be a task | Normal for ambiguous wording: use **Decide** in the Review queue (create, reply or dismiss). Keep the email explicit (title, assignee, date) |
+| Sign-in fails | Password for `demo@xpandpros.com` is in `part-2-data-to-answers/.demo-credentials` |
+| You need to start over | Archive the demo emails in `xpand@medgan.ai`, delete the demo tasks in ClickUp, and ask the assistant to clear the inbox history. Do not empty the DynamoDB table by hand (it holds the webhook subscription) |
