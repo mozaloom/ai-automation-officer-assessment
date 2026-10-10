@@ -21,7 +21,7 @@ Detail behind the Part 1 submission document ([261002_MohammedZaloom_XPAND_P1_v1
 
 **Mocked only:** Microsoft Graph (fake HTTP unit tests), ClickUp and Graph outages, and any real email send.
 
-**Not done:** ClickUp web-UI screenshots (the ClickUp UI needs an interactive sign-in; the app shows each created task with a link).
+**Evidence:** screenshots of the real ClickUp list and tasks created by the agent are in `docs/screenshots/en-clickup-*.png` (see the Part 1 README).
 
 ## Problems found while testing
 

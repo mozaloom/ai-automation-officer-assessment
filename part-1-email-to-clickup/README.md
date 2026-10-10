@@ -8,7 +8,15 @@ It is built as a working POC inside the same application and AWS stack as Part 2
 |---|---|
 | ![Inbox](../docs/screenshots/en-inbox-01-list-and-detail.png) | ![Review queue](../docs/screenshots/ar-inbox-02-review-queue.png) |
 
-More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-dialog.png), [activity trail with real ClickUp task ids](../docs/screenshots/en-inbox-04-activity.png), [phone layout](../docs/screenshots/en-inbox-05-mobile.png). These are screenshots of this application. ClickUp's own web UI could not be captured (it needs an interactive sign-in); each created task is linked from the app and its id appears in the audit trail.
+More: [reviewer decision dialog (Arabic)](../docs/screenshots/ar-inbox-03-edit-dialog.png), [activity trail with real ClickUp task ids](../docs/screenshots/en-inbox-04-activity.png), [phone layout](../docs/screenshots/en-inbox-05-mobile.png), [the live inbox on the real mailbox](../docs/screenshots/en-inbox-06-real-mailbox-live.png).
+
+**In ClickUp itself** (tasks the agent created from real emails sent to `xpand@medgan.ai`): the list view shows the assignee and the list's own columns filled from the email, and each task carries its due date, priority and the Fields section (Inbox Action, Message Received Date, Sender Email Address, Source Message Link).
+
+| List view | Task: due date, priority, Fields |
+|---|---|
+| ![ClickUp list](../docs/screenshots/en-clickup-01-list-view.png) | ![ClickUp task](../docs/screenshots/en-clickup-02-task-pricing-page.png) |
+
+A second task: [Prepare the board slides](../docs/screenshots/en-clickup-03-task-board-slides.png).
 
 ## What is verified and what is not
 

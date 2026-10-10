@@ -4,7 +4,7 @@
 |---|---|
 | [`final-submission/`](final-submission) | The two submission documents: Part 1 *From Inbox to Board* and Part 2 *Answering from the Data* (PDF) |
 | [`architecture/`](architecture) | Workflow and architecture figures used in the documents, with an index of every diagram in the repository |
-| [`screenshots/`](screenshots) | The Part 2 app in English and Arabic: sign-in, dashboard, assistant, chart, drill-down |
+| [`screenshots/`](screenshots) | The Part 2 app in English and Arabic (sign-in, dashboard, assistant, chart, drill-down); Part 1 Inbox Automation and the real ClickUp tasks it created |
 | [`part-1-implementation-and-testing.md`](part-1-implementation-and-testing.md) | Design versus build for Part 1, what was verified (real versus mocked), problems found while testing |
 | [`part-2-implementation-and-testing.md`](part-2-implementation-and-testing.md) | Detailed companion to section 12 of the Part 2 document: design-to-build mapping, the full test breakdown, scenarios and known limits |
 
