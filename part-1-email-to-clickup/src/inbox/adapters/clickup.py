@@ -100,7 +100,8 @@ class ClickUpAdapter:
                     out.append({"id": field["id"], "value": option})
             elif kind == "date":
                 moment = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-                out.append({"id": field["id"], "value": int((moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).timestamp() * 1000)})
+                # time=True keeps the moment (a date-only field is shown a day late in some time zones: "Tomorrow" for mail that arrived tonight)
+                out.append({"id": field["id"], "value": int((moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).timestamp() * 1000), "value_options": {"time": True}})
             elif kind == "checkbox":
                 out.append({"id": field["id"], "value": bool(value)})
             else:  # url, email, short_text, text
@@ -115,7 +116,17 @@ class ClickUpAdapter:
             body["custom_fields"] = self._custom_body(fields["custom"])  # a read: if it fails nothing was written yet
         if fields.get("assignee_id"):
             body["assignees"] = [int(fields["assignee_id"])]
-        return self._norm(self._call("POST", f"/list/{self.list_id}/task", body, safe_to_retry=False))
+        try:
+            return self._norm(self._call("POST", f"/list/{self.list_id}/task", body, safe_to_retry=False))
+        except AdapterError as err:
+            # The free ClickUp plan caps custom-field usage. A definitive 4xx about custom fields means nothing was created, so creating the task
+            # without them cannot duplicate it: the task matters more than its columns. The caller is told the columns were skipped.
+            if body.get("custom_fields") and 400 <= int(err.code.removeprefix("clickup_") or 0) < 500 and "custom field" in str(err).lower():
+                plain = {k: v for k, v in body.items() if k != "custom_fields"}
+                task = self._norm(self._call("POST", f"/list/{self.list_id}/task", plain, safe_to_retry=False))
+                task["custom_skipped"] = str(err)[:120]
+                return task
+            raise
 
     def update_task(self, task_id: str, fields: dict) -> dict:
         body = self._body(fields)

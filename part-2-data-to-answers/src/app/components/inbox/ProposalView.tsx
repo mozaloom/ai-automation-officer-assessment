@@ -80,6 +80,7 @@ export default function ProposalView({ m }: { m: MessageDetail }) {
         <section aria-label={d.result} className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           <p className="font-medium">{m.execution.summary || d.result}</p>
           {m.execution.adopted && <p className="text-xs">{d.adopted}</p>}
+          {m.execution.warning && <p className="mt-1 text-xs text-amber-800" role="note">{d.columnsSkipped}</p>}
           {m.execution.task_url && <a href={m.execution.task_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-brand-blue hover:underline">{d.openTask}<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>}
           {m.approved_by && <p className="mt-1 text-xs">{d.approvedBy(m.approved_by)}</p>}
         </section>

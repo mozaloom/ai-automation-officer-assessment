@@ -145,7 +145,7 @@ def test_2_a_rejected_reply_deletes_its_draft_and_sends_nothing(real, cfg, revie
 def test_3_a_task_email_creates_a_clickup_task_with_the_list_custom_fields(real, cfg, reviewer, graph, clickup):
     subject = f"{TAG} create a task"
     due = (date.today() + timedelta(days=30)).isoformat()
-    send_to_self(graph, subject, f"Please create a task: prepare the board slides. Assign it to Xpand Assessment, high priority, due {due}. Description: prepare the slides for the quarterly board meeting.")
+    send_to_self(graph, subject, f"Please create a task: organise the team offsite {TAG}. Assign it to Xpand Assessment, high priority, due {due}. Description: book the venue and send the invitations for the team offsite {TAG}.")
     item = find_item(cfg, reviewer, subject, allow_manual_sync_after=60)
     assert item["action"] == "CREATE_TASK"
     if item["status"] == "PENDING_REVIEW":  # a person approves anything the policy did not auto-run

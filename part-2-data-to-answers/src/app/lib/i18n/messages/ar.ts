@@ -165,7 +165,7 @@ export const ar: Messages = {
       notStated: "غير مذكور", priorityDefault: "افتراضي", assigneeUnknown: "لا يوجد عضو مطابق", asWritten: "كما ورد",
       matches: "مهام قائمة قد تكون العمل نفسه", noMatches: "لم يُعثر على مهمة مشابهة.", matchScore: (pct) => `تطابق ${pct}%`, sameEmail: "أُنشئت من هذه الرسالة",
       reply: "الرد المقترح", draft: "حُفظت مسودة في صندوق البريد. لم يُرسل أي شيء.",
-      result: "النتيجة", openTask: "فتح في ClickUp", openEmail: "فتح في Outlook", sent: "تم إرسال الرد", adopted: "المهمة موجودة أصلًا لهذه الرسالة، لذلك لم تُنشأ مهمة ثانية.",
+      result: "النتيجة", openTask: "فتح في ClickUp", columnsSkipped: "أُنشئت المهمة لكن ClickUp رفض أعمدة القائمة الإضافية (حد الخطة)، لذلك هي فارغة.", openEmail: "فتح في Outlook", sent: "تم إرسال الرد", adopted: "المهمة موجودة أصلًا لهذه الرسالة، لذلك لم تُنشأ مهمة ثانية.",
       error: "ما الذي حدث", retry: "إعادة المحاولة", notRetryable: "لا يمكن إعادة محاولة هذا الفشل. ارفضه أو عدّل الاقتراح.",
       history: "السجل", approvedBy: (who) => `وافق عليه ${who}`, rejectedBy: (who) => `رفضه ${who}`,
       priorityName: { "1": "عاجلة", "2": "عالية", "3": "عادية", "4": "منخفضة" },
