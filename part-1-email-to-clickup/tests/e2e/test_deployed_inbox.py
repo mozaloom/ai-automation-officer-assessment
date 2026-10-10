@@ -255,4 +255,4 @@ def test_real_mailbox_sync_and_live_updates(cfg, reviewer):
     assert call(cfg, "POST", "/inbox/sync", reviewer, {})[0] == 202
     listing = wait_for_sync(cfg, reviewer)
     assert listing["sync"]["state"] == "done" and listing["sync"]["failed"] == 0 and listing["mode"]["outlook"] == "graph"
-    assert any(not m["message_id"].startswith("sample-") for m in listing["messages"])
+    assert not any(m["message_id"].startswith("sample-") for m in listing["messages"])  # a real mailbox never lists sample items (it may legitimately be empty)

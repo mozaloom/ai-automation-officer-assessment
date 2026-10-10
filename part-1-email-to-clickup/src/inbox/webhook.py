@@ -32,8 +32,8 @@ class Webhooks:
         meta = self.store.get_meta("webhook") or {}
         if meta.get("subscription_id") and meta.get("url") == notification_url and meta.get("client_state"):
             try:
-                self.mail.renew_subscription(meta["subscription_id"], MINUTES)
-                return self._save({**meta, "state": "active", "error": None})
+                renewed = self.mail.renew_subscription(meta["subscription_id"], MINUTES)
+                return self._save({**meta, "state": "active", "error": None, "expires_at": (renewed or {}).get("expirationDateTime") or meta.get("expires_at")})
             except AdapterError as err:
                 if err.code != "graph_404":  # the subscription still exists: a temporary problem, try again next hour
                     self._save({**meta, "state": "error", "error": err.code})
